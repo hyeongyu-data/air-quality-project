@@ -98,6 +98,7 @@ services:
       TZ: 'Asia/Seoul'
       PYTHONUNBUFFERED: '1'
       PYTHONIOENCODING: 'utf-8'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
       _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       # Executor & 로딩
@@ -139,7 +140,13 @@ services:
       - ./.env:/opt/airflow/.env:ro
     
     # 시작 명령어 (standalone 모드)
-    command: standalone
+    command: >
+      bash -c "
+      airflow db migrate &&
+      (airflow users create --username airflow --password airflow --firstname Airflow --lastname Admin --role Admin --email airflow@example.com ||
+       airflow users reset-password --username airflow --password airflow) &&
+      exec airflow standalone
+      "
     
     # 의존성
     depends_on:
