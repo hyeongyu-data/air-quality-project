@@ -1,0 +1,16 @@
+.DS_Store
+.git
+.gitignore
+.venv
+__pycache__
+*.py[cod]
+*.log
+.env
+airflow.db
+logs
+Dockerfile
+docker-compose*.yaml
+COMPLETION_REPORT.md
+DEPLOYMENT.md
+VALIDATION.md
+README.md

@@ -1,0 +1,392 @@
+# 프로젝트 공통 네트워크 정의
+networks:
+  weather-network:
+    driver: bridge
+
+# 프로젝트 공통 볼륨 정의
+volumes:
+  airflow_data:
+    driver: local
+  opensearch_data:
+    driver: local
+
+services:
+  # ============================================================================
+  # Kafka: 메시지 브로커
+  # ============================================================================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: pj-kafka
+    
+    # 포트 매핑
+    ports:
+      - "9092:9092"    # Plaintext 브로커 포트 (외부 접속)
+      - "9093:9093"    # Controller 포트 (내부용, 매핑 불필요)
+    
+    # 환경변수 설정
+    environment:
+      # Kafka 노드 설정
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: 'broker,controller'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@kafka:9093'
+      
+      # 리스너 설정
+      KAFKA_LISTENERS: 'PLAINTEXT://:9092,CONTROLLER://:9093'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://kafka:9092'
+      KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT'
+      KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
+      
+      # 토픽 설정
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+      
+      # 성능 설정
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 1073741824
+      
+      # 보안 설정 (개발용)
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: 'true'
+    
+    # 헬스체크
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-broker-api-versions.sh", "--bootstrap-server=kafka:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+    
+    # 네트워크
+    networks:
+      - weather-network
+    
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # 재시작 정책
+    restart: unless-stopped
+    
+    # 로깅
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Airflow: 워크플로우 오케스트레이션
+  # ============================================================================
+  airflow:
+    image: apache/airflow:2.10.0
+    container_name: pj-airflow
+    
+    # 포트 매핑
+    ports:
+      - "8080:8080"    # Airflow 웹 UI
+    
+    # 환경변수 (airflow 설정)
+    environment:
+      # 기본 설정
+      AIRFLOW_HOME: /opt/airflow
+      TZ: 'Asia/Seoul'
+      PYTHONUNBUFFERED: '1'
+      PYTHONIOENCODING: 'utf-8'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+      # Executor & 로딩
+      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 3
+      AIRFLOW__CORE__DAG_CONCURRENCY: 3
+      
+      # 데이터베이스
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      
+      # 보안 (개발용, 프로덕션에서는 보안 강화 필요)
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__LOAD_DEFAULT_CONNECTIONS: 'false'
+      
+      # API
+      AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+      AIRFLOW__API__MAXIMUM_PAGE_LIMIT: 100
+      
+      # 추가 패키지 설치
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python opensearch-py pandas python-dotenv"
+      
+      # 외부 서비스 주소 (컨테이너 내부에서 접근)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: 9200
+    
+    # 볼륨 마운트
+    volumes:
+      # DAG 파일
+      - ./dags:/opt/airflow/dags
+      # Producer 스크립트
+      - ./producer:/opt/airflow/producer
+      # Consumer 스크립트
+      - ./consumer:/opt/airflow/consumer
+      # 영속 데이터
+      - airflow_data:/opt/airflow/logs
+      # .env 파일 (선택사항)
+      - ./.env:/opt/airflow/.env:ro
+    
+    # 시작 명령어 (standalone 모드)
+    command: standalone
+    
+    # 의존성
+    depends_on:
+      kafka:
+        condition: service_healthy
+    
+    # 헬스체크
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    # 네트워크
+    networks:
+      - weather-network
+    
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    
+    # 재시작 정책
+    restart: unless-stopped
+    
+    # 로깅
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Consumer: 데이터 처리 및 알림 발송
+  # ============================================================================
+  consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pj-consumer
+    
+    # 환경변수 (애플리케이션 설정)
+    env_file:
+      - .env
+    
+    environment:
+      # 오버라이드 (필요시)
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: 9200
+      LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: '1'
+      PYTHONIOENCODING: 'utf-8'
+    
+    # 의존성
+    depends_on:
+      kafka:
+        condition: service_healthy
+      opensearch:
+        condition: service_healthy
+    
+    # 시작 명령어
+    command: python consumer/consumer.py
+    
+    # 네트워크
+    networks:
+      - weather-network
+    
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # 재시작 정책 (지속 실행)
+    restart: unless-stopped
+    
+    # 로깅
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # OpenSearch: 데이터 저장 및 검색
+  # ============================================================================
+  opensearch:
+    image: opensearchproject/opensearch:2.8.0
+    container_name: pj-opensearch
+    
+    # 포트 매핑
+    ports:
+      - "9200:9200"    # REST API
+      - "9600:9600"    # Performance Analyzer (선택사항)
+    
+    # 환경변수
+    environment:
+      # 클러스터 설정
+      discovery.type: single-node
+      cluster.name: opensearch-cluster
+      node.name: opensearch-node-1
+      
+      # 보안 설정 (개발용 - 프로덕션에서는 활성화 필수)
+      DISABLE_SECURITY_PLUGIN: 'true'
+      
+      # 메모리 설정 (Mac Docker Desktop 최소 설정)
+      bootstrap.memory_lock: 'false'
+      OPENSEARCH_JAVA_OPTS: '-Xms128m -Xmx128m'
+      
+      # 로깅
+      logger.org.opensearch.rest.RestRequest: INFO
+    
+    # 볼륨 마운트 (영속 데이터)
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    
+    # 헬스체크 (단순 버전)
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    # 네트워크
+    networks:
+      - weather-network
+    
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # 재시작 정책
+    restart: unless-stopped
+    
+    # 로깅
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Kafka UI: Kafka 모니터링 (선택사항)
+  # ============================================================================
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: pj-kafka-ui
+    
+    # 포트 매핑
+    ports:
+      - "8081:8080"    # Kafka UI 웹 대시보드
+    
+    # 환경변수
+    environment:
+      # Kafka 클러스터 설정
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9999
+      
+      # UI 설정
+      LOGGING_LEVEL_COM_PROVECTUS: INFO
+      LOGGING_LEVEL_ROOT: INFO
+      
+      # 기능 활성화
+      DYNAMIC_CONFIG_ENABLED: 'true'
+      KAFKA_CLUSTERS_0_AUDIT_CLUSTER_APIVERSION_FALLBACK: '0.10.1'
+    
+    # 의존성
+    depends_on:
+      kafka:
+        condition: service_healthy
+    
+    # 네트워크
+    networks:
+      - weather-network
+    
+    # 리소스 제한
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    
+    # 재시작 정책
+    restart: unless-stopped
+    
+    # 로깅
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# ============================================================================
+# 프로젝트 메타데이터
+# ============================================================================
+# 사용 방법:
+# 
+# 1. 모든 서비스 시작:
+#    docker-compose up -d
+#
+# 2. 서비스 상태 확인:
+#    docker-compose ps
+#
+# 3. 특정 서비스 로그:
+#    docker-compose logs -f [service-name]
+#
+# 4. 서비스 재시작:
+#    docker-compose restart [service-name]
+#
+# 5. 모든 서비스 중지:
+#    docker-compose down
+#
+# 6. 데이터 포함 삭제:
+#    docker-compose down -v
+#
+# ============================================================================
+# 접근 주소:
+#
+# - Airflow UI: http://localhost:8080
+#   기본 계정: admin / admin
+#
+# - Kafka UI: http://localhost:8081
+#   모니터링 용도
+#
+# - OpenSearch API: http://localhost:9200
+#   REST API 직접 호출 가능
+#
+# ============================================================================
