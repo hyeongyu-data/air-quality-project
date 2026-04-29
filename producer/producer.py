@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
 
 class WeatherAPIClient:
     """기상청 공공API 클라이언트"""
-    
+
     # 기상청 생활기상지수/보건기상지수 공공데이터포털 API
-    LIVING_INDEX_BASE_URL = "http://apis.data.go.kr/1360000/LivingWthrIdxServiceV2"
+    LIVING_INDEX_BASE_URL = "http://apis.data.go.kr/1360000/LivingWthrIdxServiceV4"
     HEALTH_INDEX_BASE_URL = "http://apis.data.go.kr/1360000/HealthWthrIdxServiceV3"
-    UV_INDEX_URL = f"{LIVING_INDEX_BASE_URL}/getUVIdxV2"
-    SUMMER_FEELS_LIKE_URL = f"{LIVING_INDEX_BASE_URL}/getSenTaIdxV2"
+    UV_INDEX_URL = f"{LIVING_INDEX_BASE_URL}/getUVIdxV4"
+    SUMMER_FEELS_LIKE_URL = f"{LIVING_INDEX_BASE_URL}/getSenTaIdxV4"
     POLLEN_ENDPOINTS = {
         "oak_pollen": f"{HEALTH_INDEX_BASE_URL}/getOakPollenRiskIdxV3",
         "pine_pollen": f"{HEALTH_INDEX_BASE_URL}/getPinePollenRiskIdxV3",

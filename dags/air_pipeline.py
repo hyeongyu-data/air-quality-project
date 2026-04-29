@@ -18,6 +18,9 @@ from datetime import datetime, timedelta
 import os
 import json
 import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Dict
 
 from airflow import DAG
@@ -404,6 +407,152 @@ def publish_to_kafka(**context) -> Dict:
         raise AirflowException(f"Failed to publish to Kafka: {str(e)}")
 
 
+def _format_weather_value(value, suffix: str = "", empty: str = "정보없음") -> str:
+    """메일 본문용 값 포맷팅"""
+    if value in (None, "", "None"):
+        return empty
+    if isinstance(value, float):
+        formatted = f"{value:.1f}".rstrip("0").rstrip(".")
+        return f"{formatted}{suffix}"
+    return f"{value}{suffix}"
+
+
+def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
+    """서울 현재 기상 데이터를 이메일 제목/본문으로 변환"""
+    region = current_weather.get("region", "서울")
+    timestamp = current_weather.get("timestamp", datetime.now().isoformat())
+    data_warnings = current_weather.get("data_warnings", {})
+    
+    rows = [
+        ("꽃가루 참나무", _format_weather_value(current_weather.get("oak_pollen"))),
+        ("꽃가루 소나무", _format_weather_value(current_weather.get("pine_pollen"))),
+        ("미세먼지 PM10", _format_weather_value(current_weather.get("pm10"), "㎍/㎥")),
+        ("초미세먼지 PM2.5", _format_weather_value(current_weather.get("pm25"), "㎍/㎥")),
+        (
+            "황사",
+            f"{_format_weather_value(current_weather.get('yellow_dust'), '㎍/㎥')} "
+            f"({current_weather.get('yellow_dust_source') or '정보없음'})"
+        ),
+        ("체감온도", _format_weather_value(current_weather.get("feels_like_temp"), "℃")),
+        ("기타특보", current_weather.get("other_special_notice") or "없음"),
+        ("강수확률", _format_weather_value(current_weather.get("precipitation_probability"), "%")),
+        ("자외선지수", _format_weather_value(current_weather.get("uv_index"))),
+    ]
+    
+    text_lines = [
+        f"{region} 현재 날씨 정보",
+        f"수집시각: {timestamp}",
+        "",
+        *[f"- {label}: {value}" for label, value in rows],
+    ]
+    if data_warnings:
+        text_lines.extend(["", "참고"])
+        text_lines.extend([f"- {key}: {value}" for key, value in data_warnings.items()])
+    
+    row_html = "\n".join(
+        f"<tr><th>{label}</th><td>{value}</td></tr>"
+        for label, value in rows
+    )
+    warning_html = ""
+    if data_warnings:
+        warning_items = "".join(
+            f"<li><strong>{key}</strong>: {value}</li>"
+            for key, value in data_warnings.items()
+        )
+        warning_html = f"<h3>참고</h3><ul>{warning_items}</ul>"
+    
+    html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #222;">
+        <h2>{region} 현재 날씨 정보</h2>
+        <p>수집시각: {timestamp}</p>
+        <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse;">
+          {row_html}
+        </table>
+        {warning_html}
+      </body>
+    </html>
+    """
+    
+    return {
+        "subject": f"[날씨 알림] {region} 현재 날씨 정보",
+        "text": "\n".join(text_lines),
+        "html": html,
+    }
+
+
+def send_weather_email(**context) -> Dict:
+    """수집된 서울 현재 날씨 정보를 이메일로 발송"""
+    if os.getenv("EMAIL_ENABLED", "false").lower() != "true":
+        logger.info("이메일 발송 비활성화: EMAIL_ENABLED=false")
+        return {"status": "skipped", "reason": "EMAIL_ENABLED=false"}
+    
+    recipient_raw = os.getenv("ALERT_EMAIL", "")
+    recipients = [email.strip() for email in recipient_raw.split(",") if email.strip()]
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username = os.getenv("SMTP_USERNAME")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    from_email = os.getenv("SMTP_FROM_EMAIL") or smtp_username
+    use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+    use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
+    
+    missing = []
+    if not recipients:
+        missing.append("ALERT_EMAIL")
+    if not smtp_host:
+        missing.append("SMTP_HOST")
+    if not from_email:
+        missing.append("SMTP_FROM_EMAIL 또는 SMTP_USERNAME")
+    if not smtp_password:
+        missing.append("SMTP_PASSWORD")
+    
+    if missing:
+        logger.warning(f"이메일 발송 설정 누락: {', '.join(missing)}")
+        return {
+            "status": "skipped",
+            "reason": f"missing settings: {', '.join(missing)}"
+        }
+    
+    task_instance = context["task_instance"]
+    current_weather = task_instance.xcom_pull(
+        task_ids="fetch_current_weather",
+        key="current_weather_data"
+    )
+    if not current_weather:
+        logger.warning("메일로 발송할 서울 현재 기상 데이터가 없습니다.")
+        return {"status": "skipped", "reason": "no current_weather_data"}
+    
+    email_content = _build_weather_email(current_weather)
+    message = MIMEMultipart("alternative")
+    message["Subject"] = email_content["subject"]
+    message["From"] = from_email
+    message["To"] = ", ".join(recipients)
+    message.attach(MIMEText(email_content["text"], "plain", "utf-8"))
+    message.attach(MIMEText(email_content["html"], "html", "utf-8"))
+    
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15) as server:
+                if smtp_username:
+                    server.login(smtp_username, smtp_password)
+                server.sendmail(from_email, recipients, message.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                if use_tls:
+                    server.starttls()
+                if smtp_username:
+                    server.login(smtp_username, smtp_password)
+                server.sendmail(from_email, recipients, message.as_string())
+        
+        logger.info(f"날씨 이메일 발송 완료: {', '.join(recipients)}")
+        return {"status": "success", "recipients": recipients}
+        
+    except Exception as e:
+        logger.error(f"날씨 이메일 발송 실패: {str(e)}")
+        raise AirflowException(f"Failed to send weather email: {str(e)}")
+
+
 def notify_completion(**context) -> Dict:
     """
     DAG 실행 완료 알림
@@ -448,7 +597,15 @@ task_publish_kafka = PythonOperator(
     dag=dag
 )
 
-# Task 4: 완료 알림
+# Task 4: 이메일 발송
+task_send_email = PythonOperator(
+    task_id="send_weather_email",
+    python_callable=send_weather_email,
+    provide_context=True,
+    dag=dag
+)
+
+# Task 5: 완료 알림
 task_notify = PythonOperator(
     task_id="notify_completion",
     python_callable=notify_completion,
@@ -460,6 +617,6 @@ task_notify = PythonOperator(
 # DAG 의존성 정의
 # ============================================================================
 
-# 워크플로우: validate → fetch_current_weather → publish → notify
+# 워크플로우: validate → fetch_current_weather → publish → email → notify
 task_validate_env >> task_fetch_current >> task_publish_kafka
-task_publish_kafka >> task_notify
+task_publish_kafka >> task_send_email >> task_notify
