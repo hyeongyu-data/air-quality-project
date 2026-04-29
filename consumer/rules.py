@@ -516,9 +516,11 @@ class AlertGrouping:
         
         # 외출 자제
         if (classification_results.get("pm10") == AlertLevel.VERY_BAD or
+            classification_results.get("dust") == AlertLevel.VERY_BAD or
             classification_results.get("cold_risk") == AlertLevel.VERY_BAD):
             activate_group("외출_자제", [
                 f"미세먼지: {format_level(classification_results.get('pm10'))}",
+                f"황사: {format_level(classification_results.get('dust'))}",
                 f"감기위험: {format_level(classification_results.get('cold_risk'))}"
             ])
         
@@ -549,15 +551,19 @@ class AlertGrouping:
             ])
         
         # 보온 필수 (체감온도 0도 이하)
-        if classification_results.get("feels_like_temp_level") == AlertLevel.VERY_BAD:
+        if classification_results.get("feels_like_temp") == AlertLevel.VERY_BAD:
             activate_group("보온_필수", [
                 f"체감온도: {format_level(classification_results.get('feels_like_temp'))}"
             ])
         
         # 수분 섭취
-        if classification_results.get("discomfort") in [AlertLevel.BAD, AlertLevel.VERY_BAD]:
+        if (
+            classification_results.get("discomfort") in [AlertLevel.BAD, AlertLevel.VERY_BAD] or
+            classification_results.get("feels_like_temp") in [AlertLevel.BAD, AlertLevel.VERY_BAD]
+        ):
             activate_group("수분_섭취", [
-                f"불쾌지수: {format_level(classification_results.get('discomfort'))}"
+                f"불쾌지수: {format_level(classification_results.get('discomfort'))}",
+                f"체감온도: {format_level(classification_results.get('feels_like_temp'))}"
             ])
         
         # 위생 강화

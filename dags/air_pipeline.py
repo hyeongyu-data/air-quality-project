@@ -409,7 +409,7 @@ def publish_to_kafka(**context) -> Dict:
 
 
 def _format_weather_value(value, suffix: str = "", empty: str = "정보없음") -> str:
-    """메일 본문용 값 포맷팅"""
+    """알림 본문용 값 포맷팅"""
     if value in (None, "", "None"):
         return empty
     if isinstance(value, float):
@@ -418,42 +418,111 @@ def _format_weather_value(value, suffix: str = "", empty: str = "정보없음") 
     return f"{value}{suffix}"
 
 
-def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
-    """서울 현재 기상 데이터를 이메일 제목/본문으로 변환"""
-    region = current_weather.get("region", "서울")
-    timestamp = current_weather.get("timestamp", datetime.now().isoformat())
-    data_warnings = current_weather.get("data_warnings", {})
+def _build_rule_alert(current_weather: Dict) -> Dict:
+    """consumer/rules.py 기준으로 현재 날씨를 알림 데이터로 변환"""
+    try:
+        from consumer.consumer import WeatherDataProcessor
+        from consumer.rules import AlertGrouping
+    except ImportError:
+        import sys
+        sys.path.insert(0, "/opt/airflow")
+        from consumer.consumer import WeatherDataProcessor
+        from consumer.rules import AlertGrouping
     
-    rows = [
-        ("꽃가루 참나무", _format_weather_value(current_weather.get("oak_pollen"))),
-        ("꽃가루 소나무", _format_weather_value(current_weather.get("pine_pollen"))),
-        ("미세먼지 PM10", _format_weather_value(current_weather.get("pm10"), "㎍/㎥")),
-        ("초미세먼지 PM2.5", _format_weather_value(current_weather.get("pm25"), "㎍/㎥")),
-        (
-            "황사",
-            f"{_format_weather_value(current_weather.get('yellow_dust'), '㎍/㎥')} "
-            f"({current_weather.get('yellow_dust_source') or '정보없음'})"
-        ),
-        ("체감온도", _format_weather_value(current_weather.get("feels_like_temp"), "℃")),
-        ("기타특보", current_weather.get("other_special_notice") or "없음"),
-        ("강수확률", _format_weather_value(current_weather.get("precipitation_probability"), "%")),
-        ("자외선지수", _format_weather_value(current_weather.get("uv_index"))),
+    alert_data = WeatherDataProcessor.process_current_weather(current_weather)
+    alert_data["action_groups"] = AlertGrouping.group_alerts(
+        alert_data.get("classification_objects", {})
+    )
+    alert_data["data_warnings"] = current_weather.get("data_warnings", {})
+    return alert_data
+
+
+def _alert_display_rows(alert_data: Dict):
+    """알림 데이터의 표시 행 생성"""
+    indices = alert_data.get("indices", {})
+    levels = alert_data.get("levels", {})
+    recommendations = alert_data.get("recommendations", {})
+    emojis = alert_data.get("emojis", {})
+    display = [
+        ("oak_pollen", "꽃가루 참나무", ""),
+        ("pine_pollen", "꽃가루 소나무", ""),
+        ("pm10", "미세먼지 PM10", "㎍/㎥"),
+        ("pm25", "초미세먼지 PM2.5", "㎍/㎥"),
+        ("dust", "황사", "㎍/㎥"),
+        ("feels_like_temp", "체감온도", "℃"),
+        ("other_special_notice", "기타특보", ""),
+        ("precipitation_probability", "강수확률", "%"),
+        ("uv_index", "자외선지수", ""),
+    ]
+    
+    rows = []
+    for key, label, suffix in display:
+        value = indices.get(key)
+        rows.append({
+            "key": key,
+            "label": label,
+            "value": _format_weather_value(value, suffix),
+            "level": levels.get(f"{key}_level", "정보없음"),
+            "recommendation": recommendations.get(f"{key}_rec", ""),
+            "emoji": emojis.get(f"{key}_emoji", ""),
+        })
+    return rows
+
+
+def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
+    """규칙 판정 결과를 이메일 제목/본문으로 변환"""
+    alert_data = _build_rule_alert(current_weather)
+    region = alert_data.get("region", "서울")
+    timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+    data_warnings = alert_data.get("data_warnings", {})
+    action_groups = alert_data.get("action_groups", {})
+    rows = _alert_display_rows(alert_data)
+    
+    if action_groups and action_groups.get("정상") is None:
+        action_lines = []
+        for group_name, group_info in action_groups.items():
+            reasons = ", ".join(group_info.get("reasons", []))
+            action_lines.append(f"- {group_name}: {group_info.get('action', '')} ({reasons})")
+    else:
+        action_lines = ["- 모든 지수가 정상범위입니다."]
+    
+    detail_lines = [
+        f"- {row['label']}: {row['value']} / {row['level']} / {row['recommendation']}"
+        for row in rows
     ]
     
     text_lines = [
-        f"{region} 현재 날씨 정보",
+        f"{region} 기상 알림",
         f"수집시각: {timestamp}",
         "",
-        *[f"- {label}: {value}" for label, value in rows],
+        "필요한 행동",
+        *action_lines,
+        "",
+        "상세 판정",
+        *detail_lines,
     ]
     if data_warnings:
         text_lines.extend(["", "참고"])
         text_lines.extend([f"- {key}: {value}" for key, value in data_warnings.items()])
     
     row_html = "\n".join(
-        f"<tr><th>{label}</th><td>{value}</td></tr>"
-        for label, value in rows
+        "<tr>"
+        f"<th>{row['label']}</th>"
+        f"<td>{row['value']}</td>"
+        f"<td>{row['level']}</td>"
+        f"<td>{row['recommendation']}</td>"
+        "</tr>"
+        for row in rows
     )
+    if action_groups and action_groups.get("정상") is None:
+        action_html = "".join(
+            f"<li><strong>{group_name}</strong>: {group_info.get('action', '')}"
+            f"<br><small>{', '.join(group_info.get('reasons', []))}</small></li>"
+            for group_name, group_info in action_groups.items()
+        )
+    else:
+        action_html = "<li>모든 지수가 정상범위입니다.</li>"
+    
     warning_html = ""
     if data_warnings:
         warning_items = "".join(
@@ -465,9 +534,13 @@ def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #222;">
-        <h2>{region} 현재 날씨 정보</h2>
+        <h2>{region} 기상 알림</h2>
         <p>수집시각: {timestamp}</p>
+        <h3>필요한 행동</h3>
+        <ul>{action_html}</ul>
+        <h3>상세 판정</h3>
         <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse;">
+          <tr><th>항목</th><th>값</th><th>등급</th><th>권고</th></tr>
           {row_html}
         </table>
         {warning_html}
@@ -476,7 +549,7 @@ def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     """
     
     return {
-        "subject": f"[날씨 알림] {region} 현재 날씨 정보",
+        "subject": f"[기상 알림] {region} 행동 권고",
         "text": "\n".join(text_lines),
         "html": html,
     }
@@ -555,23 +628,42 @@ def send_weather_email(**context) -> Dict:
 
 
 def _build_kakao_text(current_weather: Dict) -> str:
-    """카카오톡 나에게 보내기용 짧은 날씨 요약 생성"""
-    region = current_weather.get("region", "서울")
-    collected_at = current_weather.get("timestamp", "")
+    """카카오톡 나에게 보내기용 규칙 기반 알림 생성"""
+    alert_data = _build_rule_alert(current_weather)
+    region = alert_data.get("region", "서울")
+    collected_at = alert_data.get("timestamp", "")
     time_label = collected_at[11:16] if len(collected_at) >= 16 else "현재"
+    action_groups = alert_data.get("action_groups", {})
+    rows = _alert_display_rows(alert_data)
+    
+    if action_groups and action_groups.get("정상") is None:
+        actions = ", ".join(
+            group_info.get("action", group_name)
+            for group_name, group_info in list(action_groups.items())[:2]
+        )
+    else:
+        actions = "특별 조치 없음"
+    
+    risk_rows = [
+        row for row in rows
+        if row["level"] in ("나쁨", "매우나쁨")
+    ][:3]
+    if not risk_rows:
+        risk_rows = [
+            row for row in rows
+            if row["level"] == "보통"
+        ][:2]
+    risk_text = ", ".join(
+        f"{row['label']} {row['level']}({row['value']})"
+        for row in risk_rows
+    ) or "대부분 좋음"
+    
     lines = [
-        f"{region} 날씨 알림 ({time_label})",
-        f"꽃가루: 참나무 {_format_weather_value(current_weather.get('oak_pollen'))}, "
-        f"소나무 {_format_weather_value(current_weather.get('pine_pollen'))}",
-        f"미세먼지: PM10 {_format_weather_value(current_weather.get('pm10'), '㎍/㎥')}, "
-        f"PM2.5 {_format_weather_value(current_weather.get('pm25'), '㎍/㎥')}",
-        f"황사: {_format_weather_value(current_weather.get('yellow_dust'), '㎍/㎥')}",
-        f"체감온도: {_format_weather_value(current_weather.get('feels_like_temp'), '℃')}",
-        f"강수확률: {_format_weather_value(current_weather.get('precipitation_probability'), '%')}",
-        f"자외선: {_format_weather_value(current_weather.get('uv_index'))}",
-        f"특보: {current_weather.get('other_special_notice') or '없음'}",
+        f"{region} 기상 알림 ({time_label})",
+        f"행동: {actions}",
+        f"판정: {risk_text}",
     ]
-    return "\n".join(lines)
+    return "\n".join(lines)[:200]
 
 
 def _refresh_kakao_access_token() -> Dict:
