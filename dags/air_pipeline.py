@@ -23,6 +23,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict
 
+import requests
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.exceptions import AirflowException
@@ -553,6 +554,117 @@ def send_weather_email(**context) -> Dict:
         raise AirflowException(f"Failed to send weather email: {str(e)}")
 
 
+def _build_kakao_text(current_weather: Dict) -> str:
+    """카카오톡 나에게 보내기용 짧은 날씨 요약 생성"""
+    region = current_weather.get("region", "서울")
+    collected_at = current_weather.get("timestamp", "")
+    time_label = collected_at[11:16] if len(collected_at) >= 16 else "현재"
+    lines = [
+        f"{region} 날씨 알림 ({time_label})",
+        f"꽃가루: 참나무 {_format_weather_value(current_weather.get('oak_pollen'))}, "
+        f"소나무 {_format_weather_value(current_weather.get('pine_pollen'))}",
+        f"미세먼지: PM10 {_format_weather_value(current_weather.get('pm10'), '㎍/㎥')}, "
+        f"PM2.5 {_format_weather_value(current_weather.get('pm25'), '㎍/㎥')}",
+        f"황사: {_format_weather_value(current_weather.get('yellow_dust'), '㎍/㎥')}",
+        f"체감온도: {_format_weather_value(current_weather.get('feels_like_temp'), '℃')}",
+        f"강수확률: {_format_weather_value(current_weather.get('precipitation_probability'), '%')}",
+        f"자외선: {_format_weather_value(current_weather.get('uv_index'))}",
+        f"특보: {current_weather.get('other_special_notice') or '없음'}",
+    ]
+    return "\n".join(lines)
+
+
+def _refresh_kakao_access_token() -> Dict:
+    """Kakao refresh token으로 access token 갱신"""
+    rest_api_key = os.getenv("KAKAO_REST_API_KEY")
+    refresh_token = os.getenv("KAKAO_REFRESH_TOKEN")
+    client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+    
+    data = {
+        "grant_type": "refresh_token",
+        "client_id": rest_api_key,
+        "refresh_token": refresh_token,
+    }
+    if client_secret:
+        data["client_secret"] = client_secret
+    
+    response = requests.post(
+        "https://kauth.kakao.com/oauth/token",
+        data=data,
+        timeout=15
+    )
+    response.raise_for_status()
+    token_data = response.json()
+    if token_data.get("refresh_token"):
+        logger.info("카카오 refresh token이 새로 발급되었습니다. .env의 KAKAO_REFRESH_TOKEN 갱신이 필요합니다.")
+    return token_data
+
+
+def send_kakao_message(**context) -> Dict:
+    """카카오톡 나에게 보내기로 서울 현재 날씨 정보를 발송"""
+    if os.getenv("KAKAO_ENABLED", "false").lower() != "true":
+        logger.info("카카오톡 발송 비활성화: KAKAO_ENABLED=false")
+        return {"status": "skipped", "reason": "KAKAO_ENABLED=false"}
+    
+    missing = []
+    if not os.getenv("KAKAO_REST_API_KEY"):
+        missing.append("KAKAO_REST_API_KEY")
+    if not os.getenv("KAKAO_REFRESH_TOKEN"):
+        missing.append("KAKAO_REFRESH_TOKEN")
+    
+    if missing:
+        logger.warning(f"카카오톡 발송 설정 누락: {', '.join(missing)}")
+        return {
+            "status": "skipped",
+            "reason": f"missing settings: {', '.join(missing)}"
+        }
+    
+    task_instance = context["task_instance"]
+    current_weather = task_instance.xcom_pull(
+        task_ids="fetch_current_weather",
+        key="current_weather_data"
+    )
+    if not current_weather:
+        logger.warning("카카오톡으로 발송할 서울 현재 기상 데이터가 없습니다.")
+        return {"status": "skipped", "reason": "no current_weather_data"}
+    
+    try:
+        token_data = _refresh_kakao_access_token()
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise AirflowException("Kakao access_token was not returned")
+        
+        template_object = {
+            "object_type": "text",
+            "text": _build_kakao_text(current_weather),
+            "link": {
+                "web_url": "https://www.weather.go.kr",
+                "mobile_web_url": "https://www.weather.go.kr",
+            },
+            "button_title": "기상청 보기",
+        }
+        
+        response = requests.post(
+            "https://kapi.kakao.com/v2/api/talk/memo/default/send",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+            },
+            data={
+                "template_object": json.dumps(template_object, ensure_ascii=False)
+            },
+            timeout=15
+        )
+        response.raise_for_status()
+        
+        logger.info("카카오톡 나에게 보내기 완료")
+        return {"status": "success", "result": response.json()}
+        
+    except Exception as e:
+        logger.error(f"카카오톡 발송 실패: {str(e)}")
+        raise AirflowException(f"Failed to send Kakao message: {str(e)}")
+
+
 def notify_completion(**context) -> Dict:
     """
     DAG 실행 완료 알림
@@ -605,7 +717,15 @@ task_send_email = PythonOperator(
     dag=dag
 )
 
-# Task 5: 완료 알림
+# Task 5: 카카오톡 발송
+task_send_kakao = PythonOperator(
+    task_id="send_kakao_message",
+    python_callable=send_kakao_message,
+    provide_context=True,
+    dag=dag
+)
+
+# Task 6: 완료 알림
 task_notify = PythonOperator(
     task_id="notify_completion",
     python_callable=notify_completion,
@@ -617,6 +737,6 @@ task_notify = PythonOperator(
 # DAG 의존성 정의
 # ============================================================================
 
-# 워크플로우: validate → fetch_current_weather → publish → email → notify
+# 워크플로우: validate → fetch_current_weather → publish → email/kakao → notify
 task_validate_env >> task_fetch_current >> task_publish_kafka
-task_publish_kafka >> task_send_email >> task_notify
+task_publish_kafka >> [task_send_email, task_send_kakao] >> task_notify
