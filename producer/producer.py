@@ -325,17 +325,72 @@ class WeatherAPIClient:
             return {}
         
         record = self._build_forecast_record(items[0], "서울")
+        latest_uv = self._select_latest_hourly_value(
+            items[0],
+            base_time=record["base_time"],
+            now=datetime.now()
+        )
+        uv_index = latest_uv.get("value") if latest_uv else record["value"]
         return {
             "timestamp": datetime.now().isoformat(),
             "region": "서울",
             "area_no": record["area_no"],
             "base_time": record["base_time"],
             "code": record["code"],
-            "uv_index": record["value"],
+            "uv_index": uv_index,
+            "uv_selected_hour": latest_uv.get("hour") if latest_uv else None,
+            "uv_selected_time": latest_uv.get("time") if latest_uv else None,
             "uv_today": record["forecast"].get("today"),
             "uv_tomorrow": record["forecast"].get("tomorrow"),
             "uv_day_after": record["forecast"].get("dayaftertomorrow"),
             "uv_two_days_after": record["forecast"].get("twodaysaftertomorrow"),
+            "uv_hourly_forecast": record["hourly_forecast"],
+        }
+    
+    @staticmethod
+    def _select_latest_hourly_value(
+        item: Dict,
+        base_time: Optional[str],
+        now: datetime
+    ) -> Optional[Dict]:
+        """h0/h3/h6... 값을 실제 예보시각으로 풀어 현재 이하 최신값 선택"""
+        if not base_time:
+            return None
+        try:
+            base_dt = datetime.strptime(base_time, "%Y%m%d%H")
+        except ValueError:
+            return None
+        
+        candidates = []
+        for key, raw_value in item.items():
+            if not (key.startswith("h") and key[1:].isdigit()):
+                continue
+            if raw_value in (None, "", "-"):
+                continue
+            value = WeatherAPIClient._safe_float(raw_value, default=None)
+            if value is None:
+                continue
+            hour_offset = int(key[1:])
+            forecast_dt = base_dt + timedelta(hours=hour_offset)
+            candidates.append({
+                "hour": key,
+                "time": forecast_dt.strftime("%Y%m%d%H"),
+                "datetime": forecast_dt,
+                "value": value,
+            })
+        
+        if not candidates:
+            return None
+        
+        past_or_now = [candidate for candidate in candidates if candidate["datetime"] <= now]
+        selected = max(past_or_now, key=lambda x: x["datetime"]) if past_or_now else min(
+            candidates,
+            key=lambda x: x["datetime"]
+        )
+        return {
+            "hour": selected["hour"],
+            "time": selected["time"],
+            "value": selected["value"],
         }
     
     def _parse_living_index(self, items: List[Dict]) -> Dict:
@@ -820,6 +875,109 @@ class KMAForecastAPIClient:
             logger.error(f"강수확률 파싱 오류: {str(e)}")
             return None
     
+    def get_today_forecast_summary(
+        self,
+        nx: int = 60,
+        ny: int = 127,
+        include_elapsed: bool = False
+    ) -> Dict:
+        """오늘 단기예보를 하루 대표 위험값으로 요약"""
+        try:
+            base_dt = self._latest_base_datetime([2, 5, 8, 11, 14, 17, 20, 23], 10)
+            items = self._request_items(self.VILAGE_FORECAST_URL, base_dt, nx, ny, num_rows=2000)
+            if not items:
+                return {}
+            
+            now = datetime.now()
+            today = now.strftime("%Y%m%d")
+            now_key = now.strftime("%Y%m%d%H%M")
+            
+            def fcst_key(item: Dict) -> str:
+                return f"{item.get('fcstDate', '')}{item.get('fcstTime', '')}"
+            
+            if include_elapsed:
+                today_items = [item for item in items if item.get("fcstDate") == today]
+            else:
+                today_items = [
+                    item for item in items
+                    if item.get("fcstDate") == today and fcst_key(item) >= now_key
+                ]
+                if not today_items:
+                    today_items = [item for item in items if item.get("fcstDate") == today]
+            if not today_items:
+                return {}
+            
+            def values_for(category: str) -> List[float]:
+                return [
+                    value for value in (
+                        self._safe_float(item.get("fcstValue"), default=None)
+                        for item in today_items
+                        if item.get("category") == category
+                    )
+                    if value is not None
+                ]
+            
+            pop_values = values_for("POP")
+            tmp_values = values_for("TMP")
+            wsd_values = values_for("WSD")
+            lgt_values = values_for("LGT")
+            pty_values = [
+                str(item.get("fcstValue", "0"))
+                for item in today_items
+                if item.get("category") == "PTY"
+            ]
+            
+            alerts = []
+            max_lgt = max(lgt_values) if lgt_values else 0
+            max_wsd = max(wsd_values) if wsd_values else 0
+            has_precipitation_type = any(value not in ("0", "", "None") for value in pty_values)
+            
+            if max_lgt > 0:
+                alerts.append("오늘 낙뢰 가능")
+            if max_wsd >= 9:
+                alerts.append("오늘 강풍 가능")
+            if has_precipitation_type:
+                alerts.append("오늘 강수 가능")
+            
+            max_temp = max(tmp_values) if tmp_values else None
+            min_temp = min(tmp_values) if tmp_values else None
+            
+            return {
+                "forecast_date": today,
+                "forecast_period": "today_full" if include_elapsed else "today_remaining",
+                "forecast_base_time": base_dt.strftime("%Y%m%d%H%M"),
+                "precipitation_probability": max(pop_values) if pop_values else None,
+                "precipitation_summary": {
+                    "max_probability": max(pop_values) if pop_values else None,
+                    "min_probability": min(pop_values) if pop_values else None,
+                    "values": pop_values,
+                },
+                "feels_like_temp": max_temp,
+                "temperature_summary": {
+                    "min_temperature": min_temp,
+                    "max_temperature": max_temp,
+                    "values": tmp_values,
+                },
+                "other_special_notice": ", ".join(alerts) if alerts else "없음",
+                "other_special_notice_source": "today_vilage_forecast",
+                "forecast_signals": {
+                    "LGT_MAX": max_lgt,
+                    "WSD_MAX": max_wsd,
+                    "PTY_VALUES": sorted(set(pty_values)),
+                },
+                "forecast_time_range": {
+                    "start": min(fcst_key(item) for item in today_items),
+                    "end": max(fcst_key(item) for item in today_items),
+                },
+            }
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"오늘 예보 요약 API 호출 실패: {str(e)}")
+            return {}
+        except Exception as e:
+            logger.error(f"오늘 예보 요약 파싱 오류: {str(e)}")
+            return {}
+    
     def get_current_temperature(self, nx: int = 60, ny: int = 127) -> Optional[Dict]:
         """초단기실황/예보 기반 현재 기온 조회"""
         try:
@@ -1078,11 +1236,11 @@ class WeatherDataCollector:
         pop_data = self.forecast_api.get_precipitation_probability(grid["nx"], grid["ny"]) or {}
         temp_data = self.forecast_api.get_current_temperature(grid["nx"], grid["ny"]) or {}
         notice_data = self.forecast_api.get_other_special_notice(grid["nx"], grid["ny"])
-        feels_like_temp = living_data.get("feels_like_temp")
-        feels_like_source = "living_weather_index"
+        feels_like_temp = temp_data.get("current_temperature")
+        feels_like_source = temp_data.get("temperature_source", "ultra_short_temperature")
         if feels_like_temp is None:
-            feels_like_temp = temp_data.get("current_temperature")
-            feels_like_source = temp_data.get("temperature_source", "ultra_short_temperature")
+            feels_like_temp = living_data.get("feels_like_temp")
+            feels_like_source = "living_weather_index"
         
         data_warnings = {}
         if not air_data:
@@ -1099,6 +1257,8 @@ class WeatherDataCollector:
                 data_warnings["living_index"] = living_error or "생활기상지수 데이터 없음"
             else:
                 data_warnings["living_index"] = "생활기상지수 API 응답 없음, 초단기실황 기온으로 대체"
+        if not temp_data and living_data:
+            data_warnings["temperature"] = "초단기실황 기온 없음, 생활기상지수 값으로 대체"
         if not uv_data:
             data_warnings["uv_index"] = uv_error or "자외선지수 데이터 없음"
         
@@ -1143,6 +1303,161 @@ class WeatherDataCollector:
             }
         }
     
+    def collect_daily_weather_forecast(
+        self,
+        region: str = "서울",
+        include_elapsed: bool = False,
+        forecast_type: str = "daily_forecast"
+    ) -> Dict:
+        """오늘 하루 예보의 대표 위험값을 모은 서울 기상 알림 데이터 생성"""
+        grid = KMAForecastAPIClient.SEOUL_GRID
+        air_data = self.airkorea_api.get_air_quality(region) or {}
+        air_quality_error = self.airkorea_api.last_error
+        yellow_dust_data = self.airkorea_api.get_yellow_dust_advisory(region) or {}
+        yellow_dust_error = self.airkorea_api.last_error if not yellow_dust_data else None
+        health_data = self.weather_api.get_health_index(grid["area_no"]) or {}
+        living_data = self.weather_api.get_living_index(grid["area_no"]) or {}
+        living_error = self.weather_api.last_error
+        uv_data = self.weather_api.get_uv_index(grid["area_no"]) or {}
+        uv_error = self.weather_api.last_error
+        today_forecast = self.forecast_api.get_today_forecast_summary(
+            grid["nx"],
+            grid["ny"],
+            include_elapsed=include_elapsed
+        ) or {}
+        
+        living_forecast_values = [
+            value for value in living_data.get("feels_like_temp_forecast", {}).values()
+            if value is not None
+        ]
+        feels_like_temp = max(living_forecast_values) if living_forecast_values else living_data.get("feels_like_temp")
+        feels_like_source = "living_weather_index_today_max"
+        if feels_like_temp is None:
+            feels_like_temp = today_forecast.get("feels_like_temp")
+            feels_like_source = "today_max_forecast_temperature"
+        
+        data_warnings = {}
+        if not air_data:
+            data_warnings["air_quality"] = air_quality_error or "대기질 데이터 없음"
+        if (
+            yellow_dust_data.get("yellow_dust_status") == "unavailable" and
+            air_data.get("yellow_dust") is None
+        ):
+            data_warnings["yellow_dust"] = yellow_dust_data.get("yellow_dust_message")
+        elif not yellow_dust_data:
+            data_warnings["yellow_dust"] = yellow_dust_error or "황사 발생정보 데이터 없음"
+        if not living_data:
+            if feels_like_temp is None:
+                data_warnings["living_index"] = living_error or "생활기상지수 데이터 없음"
+            else:
+                data_warnings["living_index"] = "생활기상지수 API 응답 없음, 오늘 최고 예보 기온으로 대체"
+        if not uv_data:
+            data_warnings["uv_index"] = uv_error or "자외선지수 데이터 없음"
+        if not today_forecast:
+            data_warnings["today_forecast"] = self.forecast_api.last_error or "오늘 단기예보 요약 데이터 없음"
+        
+        yellow_dust = yellow_dust_data.get("yellow_dust")
+        yellow_dust_source = yellow_dust_data.get("yellow_dust_source")
+        if yellow_dust_data.get("yellow_dust_advisory") != "발생" and air_data.get("yellow_dust") is not None:
+            yellow_dust = air_data.get("yellow_dust")
+            yellow_dust_source = air_data.get("yellow_dust_source")
+        
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "region": region,
+            "data_type": "current_weather",
+            "forecast_type": forecast_type,
+            "forecast_period": today_forecast.get("forecast_period", "today_remaining"),
+            "forecast_date": today_forecast.get("forecast_date", datetime.now().strftime("%Y%m%d")),
+            "area_no": grid["area_no"],
+            "nx": grid["nx"],
+            "ny": grid["ny"],
+            "latitude": grid["latitude"],
+            "longitude": grid["longitude"],
+            "oak_pollen": health_data.get("oak_pollen"),
+            "pine_pollen": health_data.get("pine_pollen"),
+            "pm10": air_data.get("pm10"),
+            "pm25": air_data.get("pm25"),
+            "yellow_dust": yellow_dust,
+            "yellow_dust_advisory": yellow_dust_data.get("yellow_dust_advisory"),
+            "yellow_dust_source": yellow_dust_source,
+            "feels_like_temp": feels_like_temp,
+            "feels_like_temp_source": feels_like_source,
+            "min_temperature": today_forecast.get("temperature_summary", {}).get("min_temperature"),
+            "max_temperature": today_forecast.get("temperature_summary", {}).get("max_temperature"),
+            "other_special_notice": today_forecast.get("other_special_notice", "정보없음"),
+            "other_special_notice_source": today_forecast.get("other_special_notice_source"),
+            "precipitation_probability": today_forecast.get("precipitation_probability"),
+            "uv_index": uv_data.get("uv_index"),
+            "data_warnings": data_warnings,
+            "source_details": {
+                "air_quality_reference": air_data,
+                "yellow_dust": yellow_dust_data,
+                "health_index": health_data,
+                "living_index": living_data,
+                "uv_index": uv_data,
+                "today_forecast": today_forecast,
+                "temperature": today_forecast.get("temperature_summary", {}),
+                "precipitation": today_forecast.get("precipitation_summary", {}),
+                "forecast_signals": today_forecast.get("forecast_signals", {}),
+            }
+        }
+    
+    def collect_morning_weather_summary(self, region: str = "서울") -> Dict:
+        """06시용: 오늘 주요 예보값과 나머지 실시간 기준을 섞은 알림 데이터 생성"""
+        grid = KMAForecastAPIClient.SEOUL_GRID
+        current_data = self.collect_current_weather(region)
+        today_forecast = self.forecast_api.get_today_forecast_summary(
+            grid["nx"],
+            grid["ny"],
+            include_elapsed=True
+        ) or {}
+        temperature_summary = today_forecast.get("temperature_summary", {})
+        
+        current_data.update({
+            "forecast_type": "morning_mixed",
+            "forecast_period": "today_full_with_current_conditions",
+            "forecast_date": today_forecast.get("forecast_date", datetime.now().strftime("%Y%m%d")),
+            "min_temperature": temperature_summary.get("min_temperature"),
+            "max_temperature": temperature_summary.get("max_temperature"),
+            "precipitation_probability": today_forecast.get("precipitation_probability"),
+            "precipitation_probability_source": "today_max_forecast_probability",
+        })
+        current_data.setdefault("source_details", {})
+        current_data["source_details"]["today_forecast"] = today_forecast
+        current_data["source_details"]["temperature"] = temperature_summary
+        current_data["source_details"]["precipitation"] = today_forecast.get("precipitation_summary", {})
+        if not today_forecast:
+            current_data.setdefault("data_warnings", {})
+            current_data["data_warnings"]["today_forecast"] = (
+                self.forecast_api.last_error or "오늘 단기예보 요약 데이터 없음"
+            )
+        
+        return current_data
+    
+    def collect_scheduled_weather(self, region: str = "서울", run_hour: Optional[int] = None) -> Dict:
+        """6시간 스케줄의 실행 시각에 맞는 알림 데이터 생성"""
+        hour = datetime.now().hour if run_hour is None else run_hour
+        if hour == 0:
+            return self.collect_daily_weather_forecast(
+                region=region,
+                include_elapsed=True,
+                forecast_type="daily_full_forecast"
+            )
+        if hour == 6:
+            return self.collect_morning_weather_summary(region=region)
+        if hour in (12, 18):
+            data = self.collect_current_weather(region=region)
+            data["forecast_type"] = "current_conditions"
+            data["forecast_period"] = "current"
+            return data
+        
+        logger.info(f"정의되지 않은 실행 시각({hour}시): 현재 기준 알림으로 처리합니다.")
+        data = self.collect_current_weather(region=region)
+        data["forecast_type"] = "current_conditions"
+        data["forecast_period"] = "current"
+        return data
+    
     def collect_and_publish(self, region: str = "서울") -> Dict[str, bool]:
         """
         모든 기상 데이터를 수집하고 Kafka로 발행
@@ -1159,7 +1474,7 @@ class WeatherDataCollector:
             }
         """
         logger.info(f"기상 데이터 수집 시작: {region}")
-        current_weather = self.collect_current_weather(region)
+        current_weather = self.collect_scheduled_weather(region)
         results = {
             "current_weather": self.producer.send_current_weather(current_weather)
         }

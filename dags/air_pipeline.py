@@ -1,13 +1,13 @@
 """
 기상지수 알림 Airflow DAG
 
-매시간 기상청/에어코리아 API에서 데이터를 수집하고
+6시간마다 기상청/에어코리아 API에서 데이터를 수집하고
 Kafka로 발행하는 자동화된 워크플로우입니다.
 
 DAG 구성:
 1. [start] 시작
 2. [validate_env] 환경변수 검증
-3. [fetch_current_weather] 서울 현재 기상 통합 데이터 수집
+3. [fetch_current_weather] 서울 오늘 기상 예보 통합 데이터 수집
 4. [publish_to_kafka] Kafka 발행
 5. [end] 완료
 
@@ -57,7 +57,7 @@ local_tz = pendulum.timezone("Asia/Seoul")
 dag = DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="매시간 기상지수 데이터 수집 및 알림 DAG",
+    description="6시간마다 기상지수 데이터 수집 및 알림 DAG",
     schedule_interval="0 */6 * * *",
     start_date=datetime(2026, 1, 1, tzinfo=local_tz),
     catchup=False,
@@ -184,15 +184,15 @@ def fetch_air_quality_data(**context) -> Dict:
 
 def fetch_current_weather_data(**context) -> Dict:
     """
-    서울 현재 기상 통합 데이터 수집
+    서울 오늘 기상 예보 통합 데이터 수집
     
     수집 항목:
     꽃가루참나무, 꽃가루소나무, 미세먼지, 초미세먼지, 황사,
-    체감온도, 기타특보, 강수확률, 자외선지수
+    오늘 최고 체감온도/기온, 오늘 특보성 신호, 오늘 최대 강수확률, 자외선지수
     """
     try:
         logger.info("=" * 80)
-        logger.info("서울 현재 기상 통합 데이터 수집 시작")
+        logger.info("서울 오늘 기상 예보 통합 데이터 수집 시작")
         logger.info("=" * 80)
         
         try:
@@ -202,19 +202,21 @@ def fetch_current_weather_data(**context) -> Dict:
             sys.path.insert(0, "/opt/airflow")
             from producer.producer import WeatherDataCollector
         
+        run_dt = context.get("data_interval_end") or pendulum.now(local_tz)
+        run_hour = run_dt.in_timezone(local_tz).hour if hasattr(run_dt, "in_timezone") else datetime.now().hour
         collector = WeatherDataCollector()
-        current_weather = collector.collect_current_weather(region="서울")
+        current_weather = collector.collect_scheduled_weather(region="서울", run_hour=run_hour)
         collector.close()
         
         if not current_weather:
-            logger.warning("서울 현재 기상 통합 데이터 수집 실패")
+            logger.warning("서울 오늘 기상 예보 통합 데이터 수집 실패")
             return {
                 "status": "failed",
                 "region": "서울",
                 "data": None
             }
         
-        logger.info(f"서울 현재 기상 수집 성공: {json.dumps(current_weather, ensure_ascii=False)}")
+        logger.info(f"서울 기상 알림 데이터 수집 성공: {json.dumps(current_weather, ensure_ascii=False)}")
         context["task_instance"].xcom_push(
             key="current_weather_data",
             value=current_weather
@@ -227,8 +229,8 @@ def fetch_current_weather_data(**context) -> Dict:
         }
         
     except Exception as e:
-        logger.error(f"서울 현재 기상 통합 데이터 수집 오류: {str(e)}")
-        raise AirflowException(f"Failed to fetch current weather data: {str(e)}")
+        logger.error(f"서울 오늘 기상 예보 통합 데이터 수집 오류: {str(e)}")
+        raise AirflowException(f"Failed to fetch daily weather forecast data: {str(e)}")
 
 
 def fetch_health_index_data(**context) -> Dict:
@@ -381,9 +383,9 @@ def publish_to_kafka(**context) -> Dict:
         if current_weather:
             if producer.send_current_weather(current_weather):
                 published_count += 1
-                logger.info("✅ 서울 현재 기상 통합 데이터 발행 성공")
+                logger.info("✅ 서울 오늘 기상 예보 통합 데이터 발행 성공")
             else:
-                logger.warning("❌ 서울 현재 기상 통합 데이터 발행 실패")
+                logger.warning("❌ 서울 오늘 기상 예보 통합 데이터 발행 실패")
             
             producer.flush()
             producer.close()
@@ -394,7 +396,7 @@ def publish_to_kafka(**context) -> Dict:
                 "published_messages": published_count
             }
         
-        logger.warning("발행할 서울 현재 기상 데이터가 없습니다.")
+        logger.warning("발행할 서울 오늘 기상 예보 데이터가 없습니다.")
         
         # 버퍼 플러시
         producer.flush()
@@ -423,7 +425,7 @@ def _format_weather_value(value, suffix: str = "", empty: str = "정보없음") 
 
 
 def _build_rule_alert(current_weather: Dict) -> Dict:
-    """consumer/rules.py 기준으로 현재 날씨를 알림 데이터로 변환"""
+    """consumer/rules.py 기준으로 오늘 예보를 알림 데이터로 변환"""
     try:
         from consumer.consumer import WeatherDataProcessor
         from consumer.rules import AlertGrouping
@@ -438,6 +440,7 @@ def _build_rule_alert(current_weather: Dict) -> Dict:
         alert_data.get("classification_objects", {})
     )
     alert_data["data_warnings"] = current_weather.get("data_warnings", {})
+    alert_data["raw_data"] = current_weather
     return alert_data
 
 
@@ -473,6 +476,18 @@ def _alert_display_rows(alert_data: Dict):
     return rows
 
 
+def _alert_title_label(raw_data: Dict) -> str:
+    """수집 모드에 맞는 알림 제목 문구"""
+    forecast_type = raw_data.get("forecast_type")
+    if forecast_type == "current_conditions":
+        return "현재 기상 알림"
+    if forecast_type == "morning_mixed":
+        return "오늘 아침 기상 알림"
+    if forecast_type == "daily_full_forecast":
+        return "오늘 전체 예보 알림"
+    return "오늘 기상 예보 알림"
+
+
 def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     """규칙 판정 결과를 이메일 제목/본문으로 변환"""
     alert_data = _build_rule_alert(current_weather)
@@ -480,7 +495,15 @@ def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     timestamp = alert_data.get("timestamp", datetime.now().isoformat())
     data_warnings = alert_data.get("data_warnings", {})
     action_groups = alert_data.get("action_groups", {})
+    raw_data = alert_data.get("raw_data", {})
+    title_label = _alert_title_label(raw_data)
     rows = _alert_display_rows(alert_data)
+    temp_summary = ""
+    if raw_data.get("min_temperature") is not None or raw_data.get("max_temperature") is not None:
+        temp_summary = (
+            f"오늘 기온: 최저 {_format_weather_value(raw_data.get('min_temperature'), '℃')} / "
+            f"최고 {_format_weather_value(raw_data.get('max_temperature'), '℃')}"
+        )
     
     if action_groups and action_groups.get("정상") is None:
         action_lines = []
@@ -496,12 +519,13 @@ def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     ]
     
     text_lines = [
-        f"{region} 기상 알림",
+        f"{region} {title_label}",
         f"수집시각: {timestamp}",
         "",
         "필요한 행동",
         *action_lines,
         "",
+        *([temp_summary, ""] if temp_summary else []),
         "상세 판정",
         *detail_lines,
     ]
@@ -538,10 +562,11 @@ def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #222;">
-        <h2>{region} 기상 알림</h2>
+        <h2>{region} {title_label}</h2>
         <p>수집시각: {timestamp}</p>
         <h3>필요한 행동</h3>
         <ul>{action_html}</ul>
+        {f"<p><strong>{temp_summary}</strong></p>" if temp_summary else ""}
         <h3>상세 판정</h3>
         <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse;">
           <tr><th>항목</th><th>값</th><th>등급</th><th>권고</th></tr>
@@ -553,14 +578,14 @@ def _build_weather_email(current_weather: Dict) -> Dict[str, str]:
     """
     
     return {
-        "subject": f"[기상 알림] {region} 행동 권고",
+        "subject": f"[{title_label}] {region} 행동 권고",
         "text": "\n".join(text_lines),
         "html": html,
     }
 
 
 def send_weather_email(**context) -> Dict:
-    """수집된 서울 현재 날씨 정보를 이메일로 발송"""
+    """수집된 서울 오늘 기상 예보 알림을 이메일로 발송"""
     if os.getenv("EMAIL_ENABLED", "false").lower() != "true":
         logger.info("이메일 발송 비활성화: EMAIL_ENABLED=false")
         return {"status": "skipped", "reason": "EMAIL_ENABLED=false"}
@@ -598,7 +623,7 @@ def send_weather_email(**context) -> Dict:
         key="current_weather_data"
     )
     if not current_weather:
-        logger.warning("메일로 발송할 서울 현재 기상 데이터가 없습니다.")
+        logger.warning("메일로 발송할 서울 오늘 기상 예보 데이터가 없습니다.")
         return {"status": "skipped", "reason": "no current_weather_data"}
     
     email_content = _build_weather_email(current_weather)
@@ -649,17 +674,19 @@ def _build_kakao_text(current_weather: Dict) -> str:
     alert_data = _build_rule_alert(current_weather)
     region = alert_data.get("region", "서울")
     collected_at = alert_data.get("timestamp", "")
-    time_label = collected_at[11:16] if len(collected_at) >= 16 else "현재"
+    time_label = collected_at[11:16] if len(collected_at) >= 16 else "오늘"
     action_groups = alert_data.get("action_groups", {})
+    raw_data = alert_data.get("raw_data", {})
+    title_label = _alert_title_label(raw_data)
     rows = _alert_display_rows(alert_data)
     
     if action_groups and action_groups.get("정상") is None:
-        actions = ", ".join(
-            group_info.get("action", group_name)
+        action_lines = [
+            f"- {group_info.get('action', group_name)}"
             for group_name, group_info in list(action_groups.items())[:2]
-        )
+        ]
     else:
-        actions = "특별 조치 없음"
+        action_lines = ["- 특별 조치 없음"]
     
     risk_rows = [
         row for row in rows
@@ -669,18 +696,48 @@ def _build_kakao_text(current_weather: Dict) -> str:
         risk_rows = [
             row for row in rows
             if row["level"] == "보통"
-        ][:2]
-    risk_text = ", ".join(
-        f"{row['label']} {row['level']}({row['value']})"
+        ][:3]
+    risk_lines = [
+        f"- {row['label']} {row['value']}: {row['level']}"
         for row in risk_rows
-    ) or "대부분 좋음"
+    ] or ["- 대부분 좋음"]
+    
+    row_by_key = {row["key"]: row for row in rows}
+    
+    def level_for(key: str) -> str:
+        return row_by_key.get(key, {}).get("level", "정보없음")
+    
+    def value_for(key: str) -> str:
+        return row_by_key.get(key, {}).get("value", "정보없음")
+    
+    summary_lines = []
+    if raw_data.get("min_temperature") is not None or raw_data.get("max_temperature") is not None:
+        summary_lines.append(
+            f"기온 최저 {_format_weather_value(raw_data.get('min_temperature'), '℃')}, "
+            f"최고 {_format_weather_value(raw_data.get('max_temperature'), '℃')}"
+        )
+    summary_lines.extend([
+        f"미세먼지 {level_for('pm10')}, 초미세먼지 {level_for('pm25')}",
+        (
+            f"황사 {level_for('dust')}, 강수확률 {value_for('precipitation_probability')}, "
+            f"자외선 {value_for('uv_index')}"
+        ),
+        f"특보 {value_for('other_special_notice')}",
+    ])
     
     lines = [
-        f"{region} 기상 알림 ({time_label})",
-        f"행동: {actions}",
-        f"판정: {risk_text}",
+        f"[{region} {title_label}] {time_label}",
+        "",
+        "행동",
+        *action_lines,
+        "",
+        "위험/주의",
+        *risk_lines,
+        "",
+        "나머지",
+        *summary_lines,
     ]
-    return "\n".join(lines)[:200]
+    return "\n".join(lines)[:1000]
 
 
 def _refresh_kakao_access_token() -> Dict:
@@ -710,7 +767,7 @@ def _refresh_kakao_access_token() -> Dict:
 
 
 def send_kakao_message(**context) -> Dict:
-    """카카오톡 나에게 보내기로 서울 현재 날씨 정보를 발송"""
+    """카카오톡 나에게 보내기로 서울 오늘 기상 예보 알림을 발송"""
     if os.getenv("KAKAO_ENABLED", "false").lower() != "true":
         logger.info("카카오톡 발송 비활성화: KAKAO_ENABLED=false")
         return {"status": "skipped", "reason": "KAKAO_ENABLED=false"}
@@ -734,7 +791,7 @@ def send_kakao_message(**context) -> Dict:
         key="current_weather_data"
     )
     if not current_weather:
-        logger.warning("카카오톡으로 발송할 서울 현재 기상 데이터가 없습니다.")
+        logger.warning("카카오톡으로 발송할 서울 오늘 기상 예보 데이터가 없습니다.")
         return {"status": "skipped", "reason": "no current_weather_data"}
     
     try:
@@ -782,7 +839,7 @@ def notify_completion(**context) -> Dict:
     logger.info("=" * 80)
     logger.info(f"✅ DAG 실행 완료 ({execution_date.isoformat()})")
     logger.info("=" * 80)
-    logger.info("다음 실행: 1시간 후")
+    logger.info("다음 실행: 6시간 후")
     
     return {
         "status": "completed",
@@ -802,7 +859,7 @@ task_validate_env = PythonOperator(
     dag=dag
 )
 
-# Task 2: 서울 현재 기상 통합 데이터 수집
+# Task 2: 서울 오늘 기상 예보 통합 데이터 수집
 task_fetch_current = PythonOperator(
     task_id="fetch_current_weather",
     python_callable=fetch_current_weather_data,
