@@ -456,6 +456,8 @@ class WeatherAlertConsumer:
                 processed.get("classification_objects", {})
             )
             processed["action_groups"] = alert_groups
+            processed["data_warnings"] = message.get("data_warnings", {})
+            processed["raw_data"] = message
             
             # 알림 발송
             results = self.alert_manager.send_all(processed)

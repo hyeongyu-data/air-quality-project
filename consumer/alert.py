@@ -1,13 +1,16 @@
 """
 알림 발송 모듈
 
-다양한 채널(콘솔, Slack, 이메일, OpenSearch)을 통해
+다양한 채널(콘솔, Slack, 이메일, 카카오톡, OpenSearch)을 통해
 기상지수 기반 알림을 발송하는 기능을 제공합니다.
 """
 
 import os
 import json
 import logging
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Dict, List, Optional
 from datetime import datetime
 import requests
@@ -269,14 +272,240 @@ class SlackAlertSender:
         return message
 
 
+def _format_weather_value(value, suffix: str = "", empty: str = "정보없음") -> str:
+    """알림 본문용 값 포맷팅"""
+    if value in (None, "", "None"):
+        return empty
+    if isinstance(value, float):
+        formatted = f"{value:.1f}".rstrip("0").rstrip(".")
+        return f"{formatted}{suffix}"
+    return f"{value}{suffix}"
+
+
+def _alert_title_label(raw_data: Dict) -> str:
+    """수집 모드에 맞는 알림 제목 문구"""
+    forecast_type = raw_data.get("forecast_type")
+    if forecast_type == "current_conditions":
+        return "현재 기상 알림"
+    if forecast_type == "morning_mixed":
+        return "오늘 아침 기상 알림"
+    if forecast_type == "daily_full_forecast":
+        return "오늘 전체 예보 알림"
+    return "오늘 기상 예보 알림"
+
+
+def _alert_display_rows(alert_data: Dict) -> List[Dict]:
+    """알림 데이터의 표시 행 생성"""
+    indices = alert_data.get("indices", {})
+    levels = alert_data.get("levels", {})
+    recommendations = alert_data.get("recommendations", {})
+    emojis = alert_data.get("emojis", {})
+    display = [
+        ("oak_pollen", "꽃가루 참나무", ""),
+        ("pine_pollen", "꽃가루 소나무", ""),
+        ("pm10", "미세먼지 PM10", "㎍/㎥"),
+        ("pm25", "초미세먼지 PM2.5", "㎍/㎥"),
+        ("dust", "황사", "㎍/㎥"),
+        ("feels_like_temp", "체감온도", "℃"),
+        ("other_special_notice", "기타특보", ""),
+        ("precipitation_probability", "강수확률", "%"),
+        ("uv_index", "자외선지수", ""),
+    ]
+    
+    rows = []
+    for key, label, suffix in display:
+        value = indices.get(key)
+        rows.append({
+            "key": key,
+            "label": label,
+            "value": _format_weather_value(value, suffix),
+            "level": levels.get(f"{key}_level", "정보없음"),
+            "recommendation": recommendations.get(f"{key}_rec", ""),
+            "emoji": emojis.get(f"{key}_emoji", ""),
+        })
+    return rows
+
+
+def _build_weather_email(alert_data: Dict) -> Dict[str, str]:
+    """규칙 판정 결과를 이메일 제목/본문으로 변환"""
+    region = alert_data.get("region", "서울")
+    timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+    data_warnings = alert_data.get("data_warnings", {})
+    action_groups = alert_data.get("action_groups", {})
+    raw_data = alert_data.get("raw_data", {})
+    title_label = _alert_title_label(raw_data)
+    rows = _alert_display_rows(alert_data)
+    temp_summary = ""
+    if raw_data.get("min_temperature") is not None or raw_data.get("max_temperature") is not None:
+        temp_summary = (
+            f"오늘 기온: 최저 {_format_weather_value(raw_data.get('min_temperature'), '℃')} / "
+            f"최고 {_format_weather_value(raw_data.get('max_temperature'), '℃')}"
+        )
+    
+    if action_groups and action_groups.get("정상") is None:
+        action_lines = []
+        for group_name, group_info in action_groups.items():
+            reasons = ", ".join(group_info.get("reasons", []))
+            action_lines.append(f"- {group_name}: {group_info.get('action', '')} ({reasons})")
+    else:
+        action_lines = ["- 모든 지수가 정상범위입니다."]
+    
+    detail_lines = [
+        f"- {row['label']}: {row['value']} / {row['level']} / {row['recommendation']}"
+        for row in rows
+    ]
+    
+    text_lines = [
+        f"{region} {title_label}",
+        f"수집시각: {timestamp}",
+        "",
+        "필요한 행동",
+        *action_lines,
+        "",
+        *([temp_summary, ""] if temp_summary else []),
+        "상세 판정",
+        *detail_lines,
+    ]
+    if data_warnings:
+        text_lines.extend(["", "참고"])
+        text_lines.extend([f"- {key}: {value}" for key, value in data_warnings.items()])
+    
+    row_html = "\n".join(
+        "<tr>"
+        f"<th>{row['label']}</th>"
+        f"<td>{row['value']}</td>"
+        f"<td>{row['level']}</td>"
+        f"<td>{row['recommendation']}</td>"
+        "</tr>"
+        for row in rows
+    )
+    if action_groups and action_groups.get("정상") is None:
+        action_html = "".join(
+            f"<li><strong>{group_name}</strong>: {group_info.get('action', '')}"
+            f"<br><small>{', '.join(group_info.get('reasons', []))}</small></li>"
+            for group_name, group_info in action_groups.items()
+        )
+    else:
+        action_html = "<li>모든 지수가 정상범위입니다.</li>"
+    
+    warning_html = ""
+    if data_warnings:
+        warning_items = "".join(
+            f"<li><strong>{key}</strong>: {value}</li>"
+            for key, value in data_warnings.items()
+        )
+        warning_html = f"<h3>참고</h3><ul>{warning_items}</ul>"
+    
+    html = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #222;">
+        <h2>{region} {title_label}</h2>
+        <p>수집시각: {timestamp}</p>
+        <h3>필요한 행동</h3>
+        <ul>{action_html}</ul>
+        {f"<p><strong>{temp_summary}</strong></p>" if temp_summary else ""}
+        <h3>상세 판정</h3>
+        <table cellpadding="8" cellspacing="0" border="1" style="border-collapse: collapse;">
+          <tr><th>항목</th><th>값</th><th>등급</th><th>권고</th></tr>
+          {row_html}
+        </table>
+        {warning_html}
+      </body>
+    </html>
+    """
+    
+    return {
+        "subject": f"[{title_label}] {region} 행동 권고",
+        "text": "\n".join(text_lines),
+        "html": html,
+    }
+
+
+def _build_kakao_text(alert_data: Dict) -> str:
+    """카카오톡 나에게 보내기용 규칙 기반 알림 생성"""
+    region = alert_data.get("region", "서울")
+    collected_at = alert_data.get("timestamp", "")
+    time_label = collected_at[11:16] if len(collected_at) >= 16 else "오늘"
+    action_groups = alert_data.get("action_groups", {})
+    raw_data = alert_data.get("raw_data", {})
+    title_label = _alert_title_label(raw_data)
+    rows = _alert_display_rows(alert_data)
+    
+    if action_groups and action_groups.get("정상") is None:
+        action_lines = [
+            f"- {group_info.get('action', group_name)}"
+            for group_name, group_info in list(action_groups.items())[:2]
+        ]
+    else:
+        action_lines = ["- 특별 조치 없음"]
+    
+    risk_rows = [
+        row for row in rows
+        if row["level"] in ("나쁨", "매우나쁨")
+    ][:3]
+    if not risk_rows:
+        risk_rows = [
+            row for row in rows
+            if row["level"] == "보통"
+        ][:3]
+    risk_lines = [
+        f"- {row['label']} {row['value']}: {row['level']}"
+        for row in risk_rows
+    ] or ["- 대부분 좋음"]
+    
+    row_by_key = {row["key"]: row for row in rows}
+    
+    def level_for(key: str) -> str:
+        return row_by_key.get(key, {}).get("level", "정보없음")
+    
+    def value_for(key: str) -> str:
+        return row_by_key.get(key, {}).get("value", "정보없음")
+    
+    summary_lines = []
+    if raw_data.get("min_temperature") is not None or raw_data.get("max_temperature") is not None:
+        summary_lines.append(
+            f"기온 최저 {_format_weather_value(raw_data.get('min_temperature'), '℃')}, "
+            f"최고 {_format_weather_value(raw_data.get('max_temperature'), '℃')}"
+        )
+    summary_lines.extend([
+        f"미세먼지 {level_for('pm10')}, 초미세먼지 {level_for('pm25')}",
+        (
+            f"황사 {level_for('dust')}, 강수확률 {value_for('precipitation_probability')}, "
+            f"자외선 {value_for('uv_index')}"
+        ),
+        f"특보 {value_for('other_special_notice')}",
+    ])
+    
+    lines = [
+        f"[{region} {title_label}] {time_label}",
+        "",
+        "행동",
+        *action_lines,
+        "",
+        "위험/주의",
+        *risk_lines,
+        "",
+        "나머지",
+        *summary_lines,
+    ]
+    return "\n".join(lines)[:1000]
+
+
 class EmailAlertSender:
     """이메일로 알림을 발송하는 클래스"""
     
     def __init__(self):
         """이메일 설정 초기화"""
         self.enabled = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
-        self.recipient = os.getenv("ALERT_EMAIL")
-        # 실제 구현 시 SMTP 설정 필요
+        recipient_raw = os.getenv("ALERT_EMAIL", "")
+        self.recipients = [email.strip() for email in recipient_raw.split(",") if email.strip()]
+        self.smtp_host = os.getenv("SMTP_HOST")
+        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        self.smtp_username = os.getenv("SMTP_USERNAME")
+        self.smtp_password = os.getenv("SMTP_PASSWORD")
+        self.from_email = os.getenv("SMTP_FROM_EMAIL") or self.smtp_username
+        self.use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
+        self.use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
     
     def send(self, alert_data: Dict) -> bool:
         """
@@ -288,18 +517,147 @@ class EmailAlertSender:
         Returns:
             bool: 발송 성공 여부
         """
-        if not self.enabled or not self.recipient:
+        if not self.enabled:
             logger.debug("이메일 알림이 비활성화되었습니다.")
             return False
         
+        missing = []
+        if not self.recipients:
+            missing.append("ALERT_EMAIL")
+        if not self.smtp_host:
+            missing.append("SMTP_HOST")
+        if not self.from_email:
+            missing.append("SMTP_FROM_EMAIL 또는 SMTP_USERNAME")
+        if not self.smtp_password:
+            missing.append("SMTP_PASSWORD")
+        if missing:
+            logger.warning(f"이메일 알림 설정 누락: {', '.join(missing)}")
+            return False
+        
         try:
-            # TODO: SMTP 설정 필요
-            logger.info(f"이메일 알림 발송: {self.recipient}")
+            email_content = _build_weather_email(alert_data)
+            message = MIMEMultipart("alternative")
+            message["Subject"] = email_content["subject"]
+            message["From"] = self.from_email
+            message["To"] = ", ".join(self.recipients)
+            message.attach(MIMEText(email_content["text"], "plain", "utf-8"))
+            message.attach(MIMEText(email_content["html"], "html", "utf-8"))
+            
+            if self.use_ssl:
+                with smtplib.SMTP_SSL(self.smtp_host, self.smtp_port, timeout=15) as server:
+                    if self.smtp_username:
+                        server.login(self.smtp_username, self.smtp_password)
+                    server.sendmail(self.from_email, self.recipients, message.as_string())
+            else:
+                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=15) as server:
+                    if self.use_tls:
+                        server.starttls()
+                    if self.smtp_username:
+                        server.login(self.smtp_username, self.smtp_password)
+                    server.sendmail(self.from_email, self.recipients, message.as_string())
+            
+            logger.info(f"이메일 알림 발송 성공: {', '.join(self.recipients)}")
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(
+                "이메일 인증 실패: Gmail 주소 또는 앱 비밀번호를 확인하세요. "
+                f"SMTP 응답={e.smtp_code}"
+            )
+            return False
         except Exception as e:
             logger.error(f"이메일 알림 발송 실패: {str(e)}")
             return False
+
+
+class KakaoAlertSender:
+    """카카오톡 나에게 보내기로 알림을 발송하는 클래스"""
+    
+    def __init__(self):
+        """카카오 API 설정 초기화"""
+        self.enabled = os.getenv("KAKAO_ENABLED", "false").lower() == "true"
+        self.rest_api_key = os.getenv("KAKAO_REST_API_KEY")
+        self.refresh_token = os.getenv("KAKAO_REFRESH_TOKEN")
+        self.client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+    
+    def send(self, alert_data: Dict) -> bool:
+        """
+        카카오톡 나에게 보내기 발송
+        
+        Args:
+            alert_data: 알림 데이터
+        
+        Returns:
+            bool: 발송 성공 여부
+        """
+        if not self.enabled:
+            logger.debug("카카오톡 알림이 비활성화되었습니다.")
+            return False
+        
+        missing = []
+        if not self.rest_api_key:
+            missing.append("KAKAO_REST_API_KEY")
+        if not self.refresh_token:
+            missing.append("KAKAO_REFRESH_TOKEN")
+        if missing:
+            logger.warning(f"카카오톡 알림 설정 누락: {', '.join(missing)}")
+            return False
+        
+        try:
+            access_token = self._refresh_access_token()
+            template_object = {
+                "object_type": "text",
+                "text": _build_kakao_text(alert_data),
+                "link": {
+                    "web_url": "https://www.weather.go.kr",
+                    "mobile_web_url": "https://www.weather.go.kr",
+                },
+                "button_title": "기상청 보기",
+            }
+            
+            response = requests.post(
+                "https://kapi.kakao.com/v2/api/talk/memo/default/send",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
+                },
+                data={
+                    "template_object": json.dumps(template_object, ensure_ascii=False)
+                },
+                timeout=15
+            )
+            response.raise_for_status()
+            
+            logger.info("카카오톡 알림 발송 성공")
+            return True
+            
+        except Exception as e:
+            logger.error(f"카카오톡 알림 발송 실패: {str(e)}")
+            return False
+    
+    def _refresh_access_token(self) -> str:
+        """refresh token으로 access token 갱신"""
+        data = {
+            "grant_type": "refresh_token",
+            "client_id": self.rest_api_key,
+            "refresh_token": self.refresh_token,
+        }
+        if self.client_secret:
+            data["client_secret"] = self.client_secret
+        
+        response = requests.post(
+            "https://kauth.kakao.com/oauth/token",
+            data=data,
+            timeout=15
+        )
+        response.raise_for_status()
+        token_data = response.json()
+        if token_data.get("refresh_token"):
+            logger.info("카카오 refresh token이 새로 발급되었습니다. .env의 KAKAO_REFRESH_TOKEN 갱신이 필요합니다.")
+        access_token = token_data.get("access_token")
+        if not access_token:
+            raise RuntimeError("Kakao access_token was not returned")
+        return access_token
 
 
 class OpenSearchAlertSender:
@@ -400,6 +758,7 @@ class AlertManager:
         self.console_sender = ConsoleAlertSender()
         self.slack_sender = SlackAlertSender()
         self.email_sender = EmailAlertSender()
+        self.kakao_sender = KakaoAlertSender()
         self.opensearch_sender = OpenSearchAlertSender(opensearch_client)
     
     def send_all(self, alert_data: Dict) -> Dict[str, bool]:
@@ -414,6 +773,7 @@ class AlertManager:
                 "console": True,
                 "slack": True,
                 "email": False,
+                "kakao": False,
                 "opensearch": True
             }
         """
@@ -421,6 +781,7 @@ class AlertManager:
             "console": self.console_sender.send(alert_data),
             "slack": self.slack_sender.send(alert_data),
             "email": self.email_sender.send(alert_data),
+            "kakao": self.kakao_sender.send(alert_data),
             "opensearch": self.opensearch_sender.send(alert_data)
         }
         

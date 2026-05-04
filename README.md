@@ -1,6 +1,6 @@
 # 서울 기상 알림 시스템
 
-서울 지역의 기상/대기질 데이터를 6시간마다 수집하고, `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 Kafka, OpenSearch, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
+서울 지역의 기상/대기질 데이터를 6시간마다 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
 
 ## 현재 동작
 
@@ -23,17 +23,17 @@ flowchart LR
     D --> E["rules.py<br/>등급/행동 권고"]
     E --> F["Console/Slack"]
     E --> G["OpenSearch"]
-    B --> H["Airflow Email"]
-    B --> I["Kakao 나에게 보내기"]
+    E --> H["Email"]
+    E --> I["Kakao 나에게 보내기"]
 ```
 
-Airflow는 데이터를 수집해 Kafka에 발행하고, 같은 DAG 안에서 이메일과 카카오톡 알림도 보냅니다. Consumer는 Kafka 메시지를 읽어 규칙 기반 판정 결과를 OpenSearch에 저장하고 콘솔/Slack 알림을 처리합니다.
+Airflow는 데이터를 수집해 Kafka에 발행합니다. Consumer는 Kafka 메시지를 읽어 규칙 기반 판정 결과를 OpenSearch에 저장하고 콘솔/Slack/이메일/카카오톡 알림을 처리합니다.
 
 ## 기술 스택
 
 | 구성 | 버전/이미지 | 역할 |
 | --- | --- | --- |
-| Airflow | `apache/airflow:2.10.0` | 6시간 스케줄링, 데이터 수집, 메일/카카오 발송 |
+| Airflow | `apache/airflow:2.10.0` | 6시간 스케줄링, 데이터 수집, Kafka 발행 |
 | Kafka | `apache/kafka:3.7.0` | 기상 데이터 메시지 브로커 |
 | Consumer | Python Docker image | 규칙 판정, 알림, OpenSearch 저장 |
 | OpenSearch | `opensearchproject/opensearch:2.8.0` | 알림 이력 저장/검색 |
@@ -44,11 +44,11 @@ Airflow는 데이터를 수집해 Kafka에 발행하고, 같은 DAG 안에서 �
 ```text
 .
 ├── docker-compose.yaml              # 로컬 실행 환경
-├── dags/air_pipeline.py             # Airflow DAG, 메일/카카오 발송
+├── dags/air_pipeline.py             # Airflow DAG, 데이터 수집 및 Kafka 발행
 ├── producer/producer.py             # 기상청/에어코리아 API 수집 및 Kafka 발행
 ├── consumer/rules.py                # 지수별 등급/행동 권고 규칙
 ├── consumer/consumer.py             # Kafka 소비, 규칙 적용, OpenSearch 저장
-├── consumer/alert.py                # 콘솔/Slack/OpenSearch 알림 포맷
+├── consumer/alert.py                # 콘솔/Slack/이메일/카카오/OpenSearch 알림
 ├── scripts/kakao_get_refresh_token.py
 ├── requirements.txt
 └── requirements-consumer.txt
@@ -143,7 +143,7 @@ http://localhost:8088/kakao/callback
 python3 scripts/kakao_get_refresh_token.py
 ```
 
-브라우저에서 카카오 로그인/동의를 마치면 터미널에 `KAKAO_REFRESH_TOKEN`이 출력됩니다. 이 값을 `.env`에 저장하면 Airflow가 실행될 때마다 refresh token으로 access token을 새로 받아 카카오톡 나에게 보내기를 수행합니다.
+브라우저에서 카카오 로그인/동의를 마치면 터미널에 `KAKAO_REFRESH_TOKEN`이 출력됩니다. 이 값을 `.env`에 저장하면 Consumer가 Kafka 메시지를 처리할 때마다 refresh token으로 access token을 새로 받아 카카오톡 나에게 보내기를 수행합니다.
 
 ## 알림 내용
 
@@ -258,4 +258,3 @@ flowchart LR
 ```
 
 Airflow가 꼭 필요하지 않다면 EventBridge Scheduler + Lambda로 단순화할 수 있습니다. DAG가 더 복잡해질 예정이면 MWAA 또는 ECS/Fargate에서 Airflow를 운영하는 방식이 맞습니다.
-
