@@ -622,9 +622,22 @@ def send_weather_email(**context) -> Dict:
         logger.info(f"날씨 이메일 발송 완료: {', '.join(recipients)}")
         return {"status": "success", "recipients": recipients}
         
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error(
+            "날씨 이메일 인증 실패: Gmail 주소 또는 앱 비밀번호를 확인하세요. "
+            f"SMTP 응답={e.smtp_code}"
+        )
+        return {
+            "status": "error",
+            "reason": "smtp_authentication_failed",
+            "smtp_code": e.smtp_code,
+        }
     except Exception as e:
         logger.error(f"날씨 이메일 발송 실패: {str(e)}")
-        raise AirflowException(f"Failed to send weather email: {str(e)}")
+        return {
+            "status": "error",
+            "reason": str(e),
+        }
 
 
 def _build_kakao_text(current_weather: Dict) -> str:
