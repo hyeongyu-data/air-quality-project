@@ -11,7 +11,7 @@ DAG 구성:
 4. [publish_to_kafka] Kafka 발행
 5. [end] 완료
 
-실행 스케줄: 매시간 (0시, 1시, 2시, ...)
+실행 스케줄: 6시간마다
 """
 
 from datetime import datetime, timedelta
@@ -22,6 +22,7 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict
+import pendulum
 
 import requests
 from airflow import DAG
@@ -50,17 +51,20 @@ DEFAULT_ARGS = {
 
 DAG_ID = "realtime_weather_alert"
 
+local_tz = pendulum.timezone("Asia/Seoul")
+
 # DAG 정의
 dag = DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
     description="매시간 기상지수 데이터 수집 및 알림 DAG",
-    schedule_interval="0 * * * *",  # 매시간 정각
-    start_date=datetime(2026, 4, 28),
+    schedule_interval="0 */6 * * *",
+    start_date=datetime(2026, 1, 1, tzinfo=local_tz),
     catchup=False,
     tags=["weather", "realtime", "alert"],
     doc_md=__doc__
 )
+
 
 # ============================================================================
 # Task 함수들
