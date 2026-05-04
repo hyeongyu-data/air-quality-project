@@ -388,7 +388,7 @@ services:
 # 접근 주소:
 #
 # - Airflow UI: http://localhost:8080
-#   기본 계정: admin / admin
+#   기본 계정: airflow / airflow
 #
 # - Kafka UI: http://localhost:8081
 #   모니터링 용도
