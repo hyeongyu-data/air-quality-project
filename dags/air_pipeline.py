@@ -1,7 +1,7 @@
 """
 기상지수 알림 Airflow DAG
 
-6시간마다 기상청/에어코리아 API에서 데이터를 수집하고
+매 시간마다 기상청/에어코리아 API에서 데이터를 수집하고
 Kafka로 발행하는 자동화된 워크플로우입니다.
 알림 발송은 Kafka 메시지를 소비하는 consumer/alert.py에서 처리합니다.
 
@@ -12,7 +12,7 @@ DAG 구성:
 4. [publish_to_kafka] Kafka 발행
 5. [end] 완료
 
-실행 스케줄: 6시간마다
+실행 스케줄: 매 시간
 """
 
 from datetime import datetime, timedelta
@@ -54,8 +54,8 @@ local_tz = pendulum.timezone("Asia/Seoul")
 dag = DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="6시간마다 기상지수 데이터 수집 및 알림 DAG",
-    schedule_interval="0 */6 * * *",
+    description="매 시간 기상지수 데이터 수집 및 알림 DAG",
+    schedule_interval="0 * * * *",
     start_date=datetime(2026, 1, 1, tzinfo=local_tz),
     catchup=False,
     tags=["weather", "realtime", "alert"],
@@ -419,7 +419,7 @@ def notify_completion(**context) -> Dict:
     logger.info("=" * 80)
     logger.info(f"✅ DAG 실행 완료 ({execution_date.isoformat()})")
     logger.info("=" * 80)
-    logger.info("다음 실행: 6시간 후")
+    logger.info("다음 실행: 1시간 후")
     
     return {
         "status": "completed",

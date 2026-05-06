@@ -212,3 +212,5 @@ __marimo__/
 # git rm -r --cached logs/
 logs/
 logs/**
+sensor_logs/
+sensor_logs/**

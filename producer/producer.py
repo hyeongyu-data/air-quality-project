@@ -1436,7 +1436,7 @@ class WeatherDataCollector:
         return current_data
     
     def collect_scheduled_weather(self, region: str = "서울", run_hour: Optional[int] = None) -> Dict:
-        """6시간 스케줄의 실행 시각에 맞는 알림 데이터 생성"""
+        """매시간 스케줄의 실행 시각에 맞는 알림 데이터 생성"""
         hour = datetime.now().hour if run_hour is None else run_hour
         if hour == 0:
             return self.collect_daily_weather_forecast(

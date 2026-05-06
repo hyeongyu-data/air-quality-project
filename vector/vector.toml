@@ -1,0 +1,27 @@
+[sources.sensor_kafka]
+type = "kafka"
+bootstrap_servers = "kafka:9092"
+group_id = "vector-firehose-sink"
+topics = ["sensor-json-logs", "sensor-text-logs"]
+auto_offset_reset = "earliest"
+decoding.codec = "json"
+
+[transforms.medallion_metadata]
+type = "remap"
+inputs = ["sensor_kafka"]
+source = '''
+.pipeline_stage = "bronze"
+.ingest_tool = "vector"
+.ingest_time = now()
+.year = format_timestamp!(now(), "%Y")
+.month = format_timestamp!(now(), "%m")
+.day = format_timestamp!(now(), "%d")
+.hour = format_timestamp!(now(), "%H")
+'''
+
+[sinks.firehose]
+type = "aws_kinesis_firehose"
+inputs = ["medallion_metadata"]
+stream_name = "${FIREHOSE_STREAM_NAME}"
+region = "${AWS_REGION}"
+encoding.codec = "json"

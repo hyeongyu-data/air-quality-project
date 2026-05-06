@@ -307,6 +307,129 @@ services:
         max-file: "3"
 
   # ============================================================================
+  # Sensor Log Generator: 메달리언 예제용 센서 로그 생성
+  # ============================================================================
+  log-generator:
+    image: python:3.10-slim
+    container_name: pj-log-generator
+    
+    volumes:
+      - ./log_generator:/app
+      - ./sensor_logs:/sensor_logs
+    
+    working_dir: /app
+    command: python generator.py
+    
+    environment:
+      SENSOR_LOG_DIR: /sensor_logs
+      SENSOR_LOG_INTERVAL_SECONDS: ${SENSOR_LOG_INTERVAL_SECONDS:-2}
+      PYTHONUNBUFFERED: '1'
+    
+    networks:
+      - weather-network
+    
+    restart: unless-stopped
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Logstash: Text 로그 grok 파싱 후 Kafka 발행
+  # ============================================================================
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.12.2
+    container_name: pj-logstash
+    
+    volumes:
+      - ./logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+    
+    environment:
+      LS_JAVA_OPTS: "-Xms256m -Xmx256m"
+      XPACK_MONITORING_ENABLED: "false"
+    
+    depends_on:
+      kafka:
+        condition: service_healthy
+    
+    networks:
+      - weather-network
+    
+    restart: unless-stopped
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Fluent Bit: 파일 tail, JSON은 Kafka로, Text는 Logstash로 라우팅
+  # ============================================================================
+  fluent-bit:
+    image: fluent/fluent-bit:2.2
+    container_name: pj-fluent-bit
+    
+    volumes:
+      - ./sensor_logs:/sensor_logs
+      - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    
+    depends_on:
+      kafka:
+        condition: service_healthy
+      logstash:
+        condition: service_started
+      log-generator:
+        condition: service_started
+    
+    networks:
+      - weather-network
+    
+    restart: unless-stopped
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
+  # Vector: Kafka 로그 토픽을 AWS Kinesis Firehose로 전달
+  # AWS 키와 Firehose Stream이 준비됐을 때 `--profile aws`로 실행
+  # ============================================================================
+  vector:
+    image: timberio/vector:0.36.0-debian
+    container_name: pj-vector
+    profiles:
+      - aws
+    
+    env_file:
+      - .env
+    
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+    
+    command: ["--config", "/etc/vector/vector.toml"]
+    
+    depends_on:
+      kafka:
+        condition: service_healthy
+    
+    networks:
+      - weather-network
+    
+    restart: unless-stopped
+    
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================================================
   # Kafka UI: Kafka 모니터링 (선택사항)
   # ============================================================================
   kafka-ui:

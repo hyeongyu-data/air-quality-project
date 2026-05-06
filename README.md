@@ -1,6 +1,6 @@
 # 서울 기상 알림 시스템
 
-서울 지역의 기상/대기질 데이터를 6시간마다 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
+서울 지역의 기상/대기질 데이터를 매 시간 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
 
 ## 현재 동작
 
@@ -17,7 +17,7 @@
 
 ```mermaid
 flowchart LR
-    A["Airflow DAG<br/>6시간마다 실행"] --> B["WeatherDataCollector<br/>기상청/에어코리아 수집"]
+    A["Airflow DAG<br/>매시간 실행"] --> B["WeatherDataCollector<br/>기상청/에어코리아 수집"]
     B --> C["Kafka topic<br/>seoul-weather"]
     C --> D["Consumer"]
     D --> E["rules.py<br/>등급/행동 권고"]
@@ -33,7 +33,7 @@ Airflow는 데이터를 수집해 Kafka에 발행합니다. Consumer는 Kafka �
 
 | 구성 | 버전/이미지 | 역할 |
 | --- | --- | --- |
-| Airflow | `apache/airflow:2.10.0` | 6시간 스케줄링, 데이터 수집, Kafka 발행 |
+| Airflow | `apache/airflow:2.10.0` | 매시간 스케줄링, 데이터 수집, Kafka 발행 |
 | Kafka | `apache/kafka:3.7.0` | 기상 데이터 메시지 브로커 |
 | Consumer | Python Docker image | 규칙 판정, 알림, OpenSearch 저장 |
 | OpenSearch | `opensearchproject/opensearch:2.8.0` | 알림 이력 저장/검색 |
@@ -49,6 +49,8 @@ Airflow는 데이터를 수집해 Kafka에 발행합니다. Consumer는 Kafka �
 ├── consumer/rules.py                # 지수별 등급/행동 권고 규칙
 ├── consumer/consumer.py             # Kafka 소비, 규칙 적용, OpenSearch 저장
 ├── consumer/alert.py                # 콘솔/Slack/이메일/카카오/OpenSearch 알림
+├── glue_jobs/bronze_to_silver.py    # AWS Glue Bronze -> Silver 변환
+├── glue_jobs/silver_to_gold_hourly.py # AWS Glue Silver -> Gold 시간별 집계
 ├── scripts/kakao_get_refresh_token.py
 ├── requirements.txt
 └── requirements-consumer.txt
@@ -113,7 +115,7 @@ Airflow 계정은 컨테이너 시작 시 자동 생성되며, 이미 존재하�
 
 ## DAG 실행
 
-Airflow UI에서 `realtime_weather_alert` DAG를 켜면 매일 `00:00`, `06:00`, `12:00`, `18:00` KST에 실행됩니다.
+Airflow UI에서 `realtime_weather_alert` DAG를 켜면 매 시간 정각에 실행됩니다. 00시는 오늘 전체 예보, 06시는 아침 요약, 나머지 시간은 현재 기준 알림으로 처리됩니다.
 
 수동 실행:
 
@@ -249,7 +251,7 @@ docker compose exec airflow airflow users reset-password --username airflow --pa
 
 ```mermaid
 flowchart LR
-    A["EventBridge Scheduler<br/>6시간마다"] --> B["Lambda<br/>기상 데이터 수집/규칙 판정"]
+    A["EventBridge Scheduler<br/>매시간"] --> B["Lambda<br/>기상 데이터 수집/규칙 판정"]
     B --> C["Kinesis Data Firehose"]
     C --> D["S3 Raw/Processed"]
     C --> E["OpenSearch"]
@@ -258,3 +260,94 @@ flowchart LR
 ```
 
 Airflow가 꼭 필요하지 않다면 EventBridge Scheduler + Lambda로 단순화할 수 있습니다. DAG가 더 복잡해질 예정이면 MWAA 또는 ECS/Fargate에서 Airflow를 운영하는 방식이 맞습니다.
+
+## 센서 로그 메달리언 파이프라인
+
+기상 알림 파이프라인과 별도로, 로컬 Kafka를 재사용하는 센서 로그 수집/메달리언 예제 파이프라인이 포함되어 있습니다.
+
+```mermaid
+flowchart LR
+    A["Python 로그 생성기"] --> B["sensor_logs/*.log"]
+    B --> C["Fluent Bit tail"]
+    C --> D["Kafka<br/>sensor-json-logs"]
+    C --> E["Logstash grok"]
+    E --> F["Kafka<br/>sensor-text-logs"]
+    D --> G["Vector"]
+    F --> G
+    G --> H["AWS Kinesis Firehose"]
+    H --> I["S3 Bronze"]
+    I --> J["Glue Silver"]
+    J --> K["Glue/Athena Gold"]
+```
+
+로컬에서 먼저 Kafka까지 확인합니다.
+
+```bash
+docker compose up -d kafka kafka-ui log-generator logstash fluent-bit
+docker compose logs -f log-generator
+docker compose logs -f fluent-bit
+docker compose logs -f logstash
+```
+
+Kafka UI에서 아래 토픽을 확인합니다.
+
+```text
+sensor-json-logs
+sensor-text-logs
+```
+
+토픽 CLI 확인:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list
+```
+
+메시지 확인:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic sensor-json-logs --from-beginning --max-messages 5
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server kafka:9092 --topic sensor-text-logs --from-beginning --max-messages 5
+```
+
+AWS Firehose로 보내려면 `.env`에 아래 값을 추가하고 `aws` profile로 Vector를 실행합니다.
+
+```bash
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_REGION=ap-northeast-2
+FIREHOSE_STREAM_NAME=sensor-log-bronze-firehose
+```
+
+```bash
+docker compose --profile aws up -d vector
+docker compose logs -f vector
+```
+
+권장 S3 메달리언 경로:
+
+```text
+s3://your-bucket/sensor-logs/bronze/
+s3://your-bucket/sensor-logs/silver/
+s3://your-bucket/sensor-logs/gold/hourly_summary/
+```
+
+Bronze는 Firehose가 받은 원본 JSON/Text 파싱 결과를 보존합니다. Silver는 Glue PySpark Job으로 `event_time`, `sensor_id`, `source_type`, `log_level`, `metric_name`, `metric_value`, `unit`, `status`, `message` 스키마로 정제하고 Parquet으로 저장합니다. Gold는 Silver를 센서/지표/시간 단위로 집계해 Athena, QuickSight, OpenSearch에서 바로 쓰는 분석 테이블로 만듭니다.
+
+Glue Job 스크립트:
+
+```text
+glue_jobs/bronze_to_silver.py
+glue_jobs/silver_to_gold_hourly.py
+```
+
+Glue Job 파라미터 예시:
+
+```bash
+# Bronze -> Silver
+--BRONZE_PATH=s3://your-bucket/sensor-logs/bronze/
+--SILVER_PATH=s3://your-bucket/sensor-logs/silver/
+
+# Silver -> Gold
+--SILVER_PATH=s3://your-bucket/sensor-logs/silver/
+--GOLD_PATH=s3://your-bucket/sensor-logs/gold/hourly_summary/
+```
