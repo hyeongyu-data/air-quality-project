@@ -27,16 +27,29 @@ def string_col(name: str):
     return F.lit(None).cast(StringType())
 
 
-df = spark.read.json(args["BRONZE_PATH"])
+def double_col(name: str):
+    if name in df.columns:
+        return F.col(name).cast(DoubleType())
+    return F.lit(None).cast(DoubleType())
+
+
+df = (
+    spark.read
+    .option("recursiveFileLookup", "true")
+    .json(args["BRONZE_PATH"])
+)
 
 silver = (
     df.select(
-        F.to_timestamp(string_col("event_time")).alias("event_time"),
+        F.coalesce(
+            F.to_timestamp(string_col("event_time"), "yyyy-MM-dd'T'HH:mm:ss.SSSX"),
+            F.to_timestamp(string_col("event_time")),
+        ).alias("event_time"),
         string_col("sensor_id").alias("sensor_id"),
         string_col("source_type").alias("source_type"),
         F.upper(string_col("log_level")).alias("log_level"),
         string_col("metric_name").alias("metric_name"),
-        F.col("metric_value").cast(DoubleType()).alias("metric_value"),
+        double_col("metric_value").alias("metric_value"),
         string_col("unit").alias("unit"),
         string_col("status").alias("status"),
         string_col("message").alias("message"),

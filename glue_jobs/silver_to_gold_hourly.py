@@ -4,6 +4,7 @@ from awsglue.context import GlueContext
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType, StringType, TimestampType
 
 
 args = getResolvedOptions(
@@ -19,7 +20,28 @@ sc = SparkContext()
 glue_context = GlueContext(sc)
 spark = glue_context.spark_session
 
-silver = spark.read.parquet(args["SILVER_PATH"])
+silver = (
+    spark.read
+    .option("recursiveFileLookup", "true")
+    .parquet(args["SILVER_PATH"])
+)
+
+
+def ensure_column(name: str, data_type):
+    if name not in silver.columns:
+        return F.lit(None).cast(data_type).alias(name)
+    return F.col(name).cast(data_type).alias(name)
+
+
+silver = silver.select(
+    ensure_column("event_time", TimestampType()),
+    ensure_column("sensor_id", StringType()),
+    ensure_column("metric_name", StringType()),
+    ensure_column("unit", StringType()),
+    ensure_column("metric_value", DoubleType()),
+    ensure_column("log_level", StringType()),
+    ensure_column("silver_processed_at", TimestampType()),
+).filter(F.col("event_time").isNotNull())
 
 gold = (
     silver
