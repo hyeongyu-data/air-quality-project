@@ -9,6 +9,8 @@ volumes:
     driver: local
   opensearch_data:
     driver: local
+  fluentbit_state:
+    driver: local
 
 services:
   # ============================================================================
@@ -374,6 +376,7 @@ services:
     
     volumes:
       - ./sensor_logs:/sensor_logs
+      - fluentbit_state:/fluent-bit/state
       - ./fluent-bit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./fluent-bit/parsers.conf:/fluent-bit/etc/parsers.conf:ro
     

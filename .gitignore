@@ -139,6 +139,8 @@ celerybeat.pid
 .env
 .envrc
 .venv
+.venv/
+airflow_env/
 env/
 venv/
 ENV/
@@ -214,3 +216,10 @@ logs/
 logs/**
 sensor_logs/
 sensor_logs/**
+
+# OS/editor noise
+.DS_Store
+
+# Generated local artifacts
+outputs/
+*.pptx

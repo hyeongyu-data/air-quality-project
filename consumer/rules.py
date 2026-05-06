@@ -239,7 +239,7 @@ class WeatherIndexRules:
         AlertRule(
             max_value=4,
             level=AlertLevel.NORMAL,
-            recommendation="감기 주의 | 손씻기, うがい 강화",
+            recommendation="감기 주의 | 손씻기, 가글 강화",
             emoji="😐"
         ),
         AlertRule(
@@ -572,7 +572,17 @@ class AlertGrouping:
                 f"감기위험: {format_level(classification_results.get('cold_risk'))}"
             ])
         
-        return activated_groups if activated_groups else {"정상": ["모든 지수가 정상범위"]}
+        if activated_groups:
+            return activated_groups
+        
+        normal_info = {
+            "description": "모든 지수가 정상범위",
+            "conditions": [],
+            "action": "특별 조치 없음",
+            "color": "✅",
+            "reasons": ["모든 지수가 정상범위"],
+        }
+        return {"정상": normal_info}
 
 
 if __name__ == "__main__":
@@ -603,7 +613,7 @@ if __name__ == "__main__":
         "dust": AlertLevel.NORMAL,
         "cold_risk": AlertLevel.NORMAL,
         "discomfort": AlertLevel.NORMAL,
-        "feels_like_temp_level": AlertLevel.GOOD,
+        "feels_like_temp": AlertLevel.GOOD,
     }
     
     print("\n" + "=" * 60)
