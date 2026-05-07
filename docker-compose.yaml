@@ -324,7 +324,7 @@ services:
     
     environment:
       SENSOR_LOG_DIR: /sensor_logs
-      SENSOR_LOG_INTERVAL_SECONDS: ${SENSOR_LOG_INTERVAL_SECONDS:-2}
+      SENSOR_LOG_INTERVAL_SECONDS: ${SENSOR_LOG_INTERVAL_SECONDS:-60}
       PYTHONUNBUFFERED: '1'
     
     networks:

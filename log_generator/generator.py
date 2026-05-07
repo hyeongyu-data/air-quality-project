@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 
 LOG_DIR = os.getenv("SENSOR_LOG_DIR", "/sensor_logs")
-INTERVAL_SECONDS = float(os.getenv("SENSOR_LOG_INTERVAL_SECONDS", "2"))
+INTERVAL_SECONDS = float(os.getenv("SENSOR_LOG_INTERVAL_SECONDS", "60"))
 
 SENSORS = ["sensor-seoul-001", "sensor-seoul-002", "sensor-seoul-003"]
 METRICS = [
