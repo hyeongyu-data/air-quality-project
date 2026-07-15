@@ -6,7 +6,7 @@ Kafka 토픽에서 기상 데이터를 구독하여
 """
 
 from .rules import AlertRuleEngine, AlertGrouping, AlertLevel
-from .alert import AlertManager, AlertFormatter
+from .alert import AlertManager
 from .consumer import (
     WeatherDataProcessor,
     KafkaWeatherConsumer,
@@ -19,7 +19,6 @@ __all__ = [
     "AlertGrouping",
     "AlertLevel",
     "AlertManager",
-    "AlertFormatter",
     "WeatherDataProcessor",
     "KafkaWeatherConsumer",
     "WeatherAlertConsumer",

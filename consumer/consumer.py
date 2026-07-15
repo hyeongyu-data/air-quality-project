@@ -16,19 +16,17 @@ import time
 from typing import Dict, Optional, List
 from datetime import datetime
 from kafka import KafkaConsumer
-from kafka.errors import KafkaError
 from opensearchpy import OpenSearch
-from opensearchpy.exceptions import OpenSearchException
 from dotenv import load_dotenv
 
 # 상대 import
 try:
     from .rules import AlertRuleEngine, AlertGrouping, AlertLevel
-    from .alert import AlertManager, AlertFormatter
+    from .alert import AlertManager
 except ImportError:
     # 직접 실행 시
     from rules import AlertRuleEngine, AlertGrouping, AlertLevel
-    from alert import AlertManager, AlertFormatter
+    from alert import AlertManager
 
 # 환경변수 로드
 load_dotenv()
@@ -173,148 +171,6 @@ class WeatherDataProcessor:
             "source_details": data.get("source_details", {})
         }
     
-    @staticmethod
-    def process_air_quality(data: Dict) -> Dict:
-        """
-        대기질 데이터 처리
-        
-        Args:
-            data: {
-                "timestamp": "2026-04-28T10:30:00",
-                "region": "서울",
-                "pm10": 45,
-                "pm25": 20,
-                ...
-            }
-        
-        Returns:
-            판정된 데이터
-        """
-        timestamp = data.get("timestamp", datetime.now().isoformat())
-        region = data.get("region", "전국")
-        
-        # 각 지수별 판정
-        pm10_val = WeatherDataProcessor._safe_float(data.get("pm10"))
-        pm25_val = WeatherDataProcessor._safe_float(data.get("pm25"))
-        ozone_val = float(data.get("o3") or 0)
-        ozone_ppb = ozone_val * 1000 if ozone_val < 1 else ozone_val
-        
-        pm10_level, pm10_rec, pm10_emoji = AlertRuleEngine.classify_pm10(pm10_val)
-        pm25_level, pm25_rec, pm25_emoji = AlertRuleEngine.classify_pm25(pm25_val)
-        ozone_level, ozone_rec, ozone_emoji = AlertRuleEngine.classify_ozone(ozone_ppb)
-        
-        return {
-            "timestamp": timestamp,
-            "region": region,
-            "data_type": "air_quality",
-            "indices": {
-                "pm10": pm10_val,
-                "pm25": pm25_val,
-                "ozone": ozone_ppb
-            },
-            "levels": {
-                "pm10_level": pm10_level.value,
-                "pm25_level": pm25_level.value,
-                "ozone_level": ozone_level.value
-            },
-            "recommendations": {
-                "pm10_rec": pm10_rec,
-                "pm25_rec": pm25_rec,
-                "ozone_rec": ozone_rec
-            },
-            "emojis": {
-                "pm10_emoji": pm10_emoji,
-                "pm25_emoji": pm25_emoji,
-                "ozone_emoji": ozone_emoji
-            },
-            "classification_objects": {
-                "pm10": pm10_level,
-                "pm25": pm25_level,
-                "ozone": ozone_level
-            }
-        }
-    
-    @staticmethod
-    def process_health_index(data: Dict) -> Dict:
-        """
-        보건기상지수 데이터 처리
-        
-        Args:
-            data: {
-                "timestamp": "2026-04-28T10:30:00",
-                "region": "서울",
-                "cold_risk": 3,
-                "asthma_risk": 4,
-                ...
-            }
-        """
-        timestamp = data.get("timestamp", datetime.now().isoformat())
-        region = data.get("region", "전국")
-        
-        cold_risk_val = data.get("cold_risk", 0)
-        cold_level, cold_rec, cold_emoji = AlertRuleEngine.classify_cold_risk(cold_risk_val)
-        
-        return {
-            "timestamp": timestamp,
-            "region": region,
-            "data_type": "health_index",
-            "indices": {
-                "cold_risk": cold_risk_val
-            },
-            "levels": {
-                "cold_risk_level": cold_level.value
-            },
-            "recommendations": {
-                "cold_risk_rec": cold_rec
-            },
-            "emojis": {
-                "cold_risk_emoji": cold_emoji
-            },
-            "classification_objects": {
-                "cold_risk": cold_level
-            }
-        }
-    
-    @staticmethod
-    def process_uv_index(data: Dict) -> Dict:
-        """
-        자외선지수 데이터 처리
-        
-        Args:
-            data: {
-                "timestamp": "2026-04-28T10:30:00",
-                "region": "서울",
-                "uv_index": 6,
-                ...
-            }
-        """
-        timestamp = data.get("timestamp", datetime.now().isoformat())
-        region = data.get("region", "전국")
-        
-        uv_val = data.get("uv_index", 0)
-        uv_level, uv_rec, uv_emoji = AlertRuleEngine.classify_uv_index(uv_val)
-        
-        return {
-            "timestamp": timestamp,
-            "region": region,
-            "data_type": "uv_index",
-            "indices": {
-                "uv_index": uv_val
-            },
-            "levels": {
-                "uv_index_level": uv_level.value
-            },
-            "recommendations": {
-                "uv_index_rec": uv_rec
-            },
-            "emojis": {
-                "uv_index_emoji": uv_emoji
-            },
-            "classification_objects": {
-                "uv_index": uv_level
-            }
-        }
-
 
 class KafkaWeatherConsumer:
     """Kafka 컨슈머"""
@@ -339,7 +195,7 @@ class KafkaWeatherConsumer:
             "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
         )
         self.group_id = group_id
-        self.topics = topics or ["seoul-weather", "air-quality", "health-index", "uv-index"]
+        self.topics = topics or ["seoul-weather"]
         self.opensearch_client = opensearch_client
         
         try:
@@ -435,22 +291,10 @@ class WeatherAlertConsumer:
                 return False
             
             logger.info(f"메시지 수신: {json.dumps(message, ensure_ascii=False)}")
-            
-            # 데이터 타입에 따라 처리
-            data_type = message.get("data_type") or self._infer_data_type(message)
-            
-            if data_type == "current_weather":
-                processed = self.processor.process_current_weather(message)
-            elif "pm10" in message or "pm25" in message:
-                processed = self.processor.process_air_quality(message)
-            elif "cold_risk" in message:
-                processed = self.processor.process_health_index(message)
-            elif "uv_index" in message:
-                processed = self.processor.process_uv_index(message)
-            else:
-                logger.warning(f"알 수 없는 데이터 타입: {message}")
-                return False
-            
+
+            # seoul-weather 토픽은 현재 기상 통합 데이터만 발행된다
+            processed = self.processor.process_current_weather(message)
+
             # 알림 그룹 생성
             alert_groups = AlertGrouping.group_alerts(
                 processed.get("classification_objects", {})
@@ -473,20 +317,6 @@ class WeatherAlertConsumer:
             logger.error(f"메시지 처리 오류: {str(e)}")
             self.stats["errors"] += 1
             return False
-    
-    @staticmethod
-    def _infer_data_type(message: Dict) -> str:
-        """메시지에서 데이터 타입 추론"""
-        if "pm10" in message or "pm25" in message:
-            if message.get("data_type") == "current_weather":
-                return "current_weather"
-            return "air_quality"
-        elif "cold_risk" in message:
-            return "health_index"
-        elif "uv_index" in message:
-            return "uv_index"
-        else:
-            return "unknown"
     
     def run_once(self) -> bool:
         """
