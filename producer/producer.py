@@ -592,45 +592,6 @@ class AirKoreaAPIClient:
             logger.error(f"대기질 데이터 파싱 오류: {str(e)}")
             return None
     
-    def get_dust_forecast(self, region: str = "서울") -> Optional[Dict]:
-        """
-        미세먼지 예측 데이터 조회 (내일/모레 예보)
-        
-        Args:
-            region: 지역명
-        
-        Returns:
-            {
-                "timestamp": "2026-04-28T10:00:00",
-                "region": "서울",
-                "pm10_tomorrow": "나쁨",
-                "pm25_tomorrow": "보통",
-                "dust": "약함",
-                ...
-            }
-        """
-        try:
-            items = self._request_items(
-                self.FORECAST_URL,
-                {"sidoName": region},
-                "ArpltnInforInqireSvc/getMinuDustFrcstDspth"
-            )
-            if items:
-                parsed = self._parse_dust_forecast(items[0], region)
-                logger.info(f"미세먼지 예측 수집 성공: {region}")
-                return parsed
-            else:
-                logger.warning(f"에어코리아 예측 데이터 없음: {region}")
-                return None
-                
-        except requests.exceptions.RequestException as e:
-            self.last_error = str(e)
-            logger.error(f"에어코리아 API 호출 실패: {str(e)}")
-            return None
-        except Exception as e:
-            logger.error(f"미세먼지 예측 파싱 오류: {str(e)}")
-            return None
-
     def get_yellow_dust_advisory(self, region: str = "서울") -> Dict:
         """황사 발생정보 문서 기준 현재 연도 황사 발생 지역 조회"""
         try:
@@ -747,19 +708,6 @@ class AirKoreaAPIClient:
         })
         return representative
     
-    @staticmethod
-    def _parse_dust_forecast(item: Dict, region: str) -> Dict:
-        """미세먼지 예측 데이터 파싱"""
-        return {
-            "timestamp": datetime.now().isoformat(),
-            "region": region,
-            "pm10_tomorrow": item.get("pm10Value1", "정보없음"),
-            "pm25_tomorrow": item.get("pm25Value1", "정보없음"),
-            "pm10_day_after": item.get("pm10Value2", "정보없음"),
-            "pm25_day_after": item.get("pm25Value2", "정보없음"),
-            "dust": item.get("seoul_nh3Cck", "정보없음")
-        }
-
 
 class KMAForecastAPIClient:
     """기상청 단기예보 조회서비스 클라이언트"""
@@ -1059,26 +1007,18 @@ class KafkaWeatherProducer:
     def __init__(
         self,
         bootstrap_servers: str = None,
-        topic_air_quality: str = "air-quality",
-        topic_health_index: str = "health-index",
-        topic_uv_index: str = "uv-index",
         topic_current_weather: str = "seoul-weather"
     ):
         """
         Kafka 프로듀서 초기화
-        
+
         Args:
             bootstrap_servers: Kafka 브로커 주소 (기본값: 환경변수)
-            topic_air_quality: 대기질 토픽명
-            topic_health_index: 보건기상지수 토픽명
-            topic_uv_index: 자외선지수 토픽명
+            topic_current_weather: 서울 현재 기상 통합 토픽명
         """
         self.bootstrap_servers = bootstrap_servers or os.getenv(
             "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
         )
-        self.topic_air_quality = topic_air_quality
-        self.topic_health_index = topic_health_index
-        self.topic_uv_index = topic_uv_index
         self.topic_current_weather = topic_current_weather
         
         try:
@@ -1092,42 +1032,6 @@ class KafkaWeatherProducer:
         except Exception as e:
             logger.error(f"Kafka 프로듀서 초기화 실패: {str(e)}")
             self.producer = None
-    
-    def send_air_quality(self, data: Dict) -> bool:
-        """
-        대기질 데이터 발행
-        
-        Args:
-            data: 대기질 데이터
-        
-        Returns:
-            bool: 발행 성공 여부
-        """
-        if not self.producer:
-            logger.warning("Kafka 프로듀서가 초기화되지 않음")
-            return False
-        
-        try:
-            future = self.producer.send(
-                self.topic_air_quality,
-                value=data,
-                key=data.get("region", "전국").encode('utf-8')
-            )
-            
-            # 발행 완료 대기
-            record_metadata = future.get(timeout=5)
-            
-            logger.info(
-                f"대기질 데이터 발행 성공: "
-                f"토픽={record_metadata.topic}, "
-                f"파티션={record_metadata.partition}, "
-                f"오프셋={record_metadata.offset}"
-            )
-            return True
-            
-        except Exception as e:
-            logger.error(f"대기질 데이터 발행 실패: {str(e)}")
-            return False
     
     def send_current_weather(self, data: Dict) -> bool:
         """서울 현재 기상 통합 데이터 발행"""
@@ -1147,48 +1051,6 @@ class KafkaWeatherProducer:
             
         except Exception as e:
             logger.error(f"서울 현재 기상 통합 데이터 발행 실패: {str(e)}")
-            return False
-    
-    def send_health_index(self, data: Dict) -> bool:
-        """보건기상지수 데이터 발행"""
-        if not self.producer:
-            logger.warning("Kafka 프로듀서가 초기화되지 않음")
-            return False
-        
-        try:
-            future = self.producer.send(
-                self.topic_health_index,
-                value=data,
-                key=data.get("region", "전국").encode('utf-8')
-            )
-            
-            record_metadata = future.get(timeout=5)
-            logger.info(f"보건기상지수 발행 성공: 오프셋={record_metadata.offset}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"보건기상지수 발행 실패: {str(e)}")
-            return False
-    
-    def send_uv_index(self, data: Dict) -> bool:
-        """자외선지수 데이터 발행"""
-        if not self.producer:
-            logger.warning("Kafka 프로듀서가 초기화되지 않음")
-            return False
-        
-        try:
-            future = self.producer.send(
-                self.topic_uv_index,
-                value=data,
-                key=data.get("region", "전국").encode('utf-8')
-            )
-            
-            record_metadata = future.get(timeout=5)
-            logger.info(f"자외선지수 발행 성공: 오프셋={record_metadata.offset}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"자외선지수 발행 실패: {str(e)}")
             return False
     
     def flush(self):
@@ -1467,10 +1329,7 @@ class WeatherDataCollector:
         
         Returns:
             {
-                "air_quality": True,
-                "health_index": True,
-                "uv_index": True,
-                "dust_forecast": True
+                "current_weather": True
             }
         """
         logger.info(f"기상 데이터 수집 시작: {region}")
@@ -1515,10 +1374,7 @@ def main():
     except Exception as e:
         logger.error(f"프로듀서 실행 중 오류: {str(e)}")
         return {
-            "air_quality": False,
-            "health_index": False,
-            "uv_index": False,
-            "dust_forecast": False
+            "current_weather": False
         }
 
 
@@ -1534,31 +1390,28 @@ if __name__ == "__main__":
     
     # 더미 데이터로 프로듀서 테스트
     producer = KafkaWeatherProducer()
-    
-    # 샘플 대기질 데이터
-    sample_air_data = {
+
+    # 샘플 현재 기상 통합 데이터
+    sample_weather = {
         "timestamp": datetime.now().isoformat(),
         "region": "서울",
+        "data_type": "current_weather",
         "pm10": 45,
         "pm25": 20,
-        "o3": 0.065,
-        "no2": 0.045,
-        "so2": 0.005,
-        "co": 0.5,
-        "pm10_grade": "보통",
-        "pm25_grade": "보통",
-        "o3_grade": "좋음"
+        "feels_like_temp": 18,
+        "precipitation_probability": 30,
+        "uv_index": 5,
     }
-    
+
     print("\n발행할 샘플 데이터:")
-    print(json.dumps(sample_air_data, ensure_ascii=False, indent=2))
-    
+    print(json.dumps(sample_weather, ensure_ascii=False, indent=2))
+
     # Kafka 발행 테스트
-    if producer.send_air_quality(sample_air_data):
+    if producer.send_current_weather(sample_weather):
         print("\n✅ Kafka 발행 성공")
     else:
         print("\n❌ Kafka 발행 실패 (Kafka 서버가 실행 중인지 확인하세요)")
-    
+
     producer.close()
     
     print("\n" + "=" * 80)

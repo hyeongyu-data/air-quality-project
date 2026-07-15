@@ -116,34 +116,6 @@ class WeatherIndexRules:
         ),
     ]
     
-    # ============ 오존 농도 (ppb) ============
-    OZONE_RULES: List[AlertRule] = [
-        AlertRule(
-            max_value=30,
-            level=AlertLevel.GOOD,
-            recommendation="실외활동 자유",
-            emoji="😊"
-        ),
-        AlertRule(
-            max_value=60,
-            level=AlertLevel.NORMAL,
-            recommendation="민감군 주의 | 실외활동 중 깊게 숨쉬기 피하기",
-            emoji="😐"
-        ),
-        AlertRule(
-            max_value=100,
-            level=AlertLevel.BAD,
-            recommendation="실외활동 제한 | 마스크 착용 권고",
-            emoji="😷"
-        ),
-        AlertRule(
-            max_value=500,
-            level=AlertLevel.VERY_BAD,
-            recommendation="외출 자제 | 실내 활동 권고 | 공기청정기 가동",
-            emoji="⚠️"
-        ),
-    ]
-    
     # ============ 황사 ============
     DUST_RULES: List[AlertRule] = [
         AlertRule(
@@ -228,62 +200,6 @@ class WeatherIndexRules:
         ),
     ]
     
-    # ============ 보건기상지수 - 감기 ============
-    COLD_RISK_RULES: List[AlertRule] = [
-        AlertRule(
-            max_value=2,
-            level=AlertLevel.GOOD,
-            recommendation="감기 위험 낮음 | 일상활동 가능",
-            emoji="😊"
-        ),
-        AlertRule(
-            max_value=4,
-            level=AlertLevel.NORMAL,
-            recommendation="감기 주의 | 손씻기, 가글 강화",
-            emoji="😐"
-        ),
-        AlertRule(
-            max_value=6,
-            level=AlertLevel.BAD,
-            recommendation="감기 위험 높음 | 마스크 착용 | 손위생 철저히",
-            emoji="😷"
-        ),
-        AlertRule(
-            max_value=10,
-            level=AlertLevel.VERY_BAD,
-            recommendation="감기 고위험 | 외출 자제 | 사람 많은 곳 피하기",
-            emoji="⚠️"
-        ),
-    ]
-    
-    # ============ 생활기상지수 - 불쾌지수 ============
-    DISCOMFORT_RULES: List[AlertRule] = [
-        AlertRule(
-            max_value=55,
-            level=AlertLevel.GOOD,
-            recommendation="쾌적한 날씨 | 외출하기 좋음",
-            emoji="😊"
-        ),
-        AlertRule(
-            max_value=60,
-            level=AlertLevel.NORMAL,
-            recommendation="약간 불쾌감 | 가벼운 복장 권고",
-            emoji="😐"
-        ),
-        AlertRule(
-            max_value=70,
-            level=AlertLevel.BAD,
-            recommendation="불쾌감 높음 | 통풍 좋은 옷 착용 | 수분 섭취",
-            emoji="😷"
-        ),
-        AlertRule(
-            max_value=100,
-            level=AlertLevel.VERY_BAD,
-            recommendation="매우 불쾌 | 실내 활동 권고 | 에어컨 사용 | 충분한 수분 섭취",
-            emoji="⚠️"
-        ),
-    ]
-    
     # ============ 생활기상지수 - 체감온도 ============
     FEELS_LIKE_TEMP_RULES: List[AlertRule] = [
         AlertRule(
@@ -346,11 +262,6 @@ class AlertRuleEngine:
         return AlertRuleEngine._classify(value, WeatherIndexRules.UV_INDEX_RULES)
     
     @staticmethod
-    def classify_ozone(value: float) -> Tuple[AlertLevel, str, str]:
-        """오존 농도 판정"""
-        return AlertRuleEngine._classify(value, WeatherIndexRules.OZONE_RULES)
-    
-    @staticmethod
     def classify_dust(value: float) -> Tuple[AlertLevel, str, str]:
         """황사 판정"""
         return AlertRuleEngine._classify(value, WeatherIndexRules.DUST_RULES)
@@ -371,16 +282,6 @@ class AlertRuleEngine:
         if value and value not in ["없음", "정보없음"]:
             return AlertLevel.BAD, "특보성 신호 확인 | 최신 기상정보 확인 권고", "⚠️"
         return AlertLevel.GOOD, "특보성 신호 없음", "😊"
-    
-    @staticmethod
-    def classify_cold_risk(value: float) -> Tuple[AlertLevel, str, str]:
-        """감기 위험 판정"""
-        return AlertRuleEngine._classify(value, WeatherIndexRules.COLD_RISK_RULES)
-    
-    @staticmethod
-    def classify_discomfort(value: float) -> Tuple[AlertLevel, str, str]:
-        """불쾌지수 판정"""
-        return AlertRuleEngine._classify(value, WeatherIndexRules.DISCOMFORT_RULES)
     
     @staticmethod
     def classify_feels_like_temp(value: float) -> Tuple[AlertLevel, str, str]:

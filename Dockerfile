@@ -54,35 +54,6 @@ COPY consumer ./consumer
 RUN chmod -R 755 /app
 
 # ============================================================================
-# 헬스체크 스크립트 (선택사항)
-# ============================================================================
-
-# healthcheck용 간단한 스크립트 (OpenSearch 연결 확인)
-RUN cat > /app/healthcheck.sh << 'EOF'
-#!/bin/bash
-set -e
-
-# OpenSearch 연결 확인
-curl -f http://${OPENSEARCH_HOST:-localhost}:${OPENSEARCH_PORT:-9200}/_cluster/health || exit 1
-
-# Kafka 연결 확인
-python -c "
-from kafka import KafkaConsumer
-import sys
-try:
-    consumer = KafkaConsumer(bootstrap_servers='${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}')
-    consumer.close()
-except Exception as e:
-    print(f'Kafka connection failed: {e}')
-    sys.exit(1)
-"
-
-exit 0
-EOF
-
-RUN chmod +x /app/healthcheck.sh
-
-# ============================================================================
 # 포트 (정보용, 실제 바인딩은 docker-compose에서)
 # ============================================================================
 

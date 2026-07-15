@@ -789,53 +789,6 @@ class AlertManager:
         logger.info(f"알림 발송 결과: {success_count}/{len(results)} 채널 성공")
         
         return results
-    
-    def send_console_only(self, alert_data: Dict) -> bool:
-        """콘솔로만 알림 발송 (개발/테스트용)"""
-        return self.console_sender.send(alert_data)
-    
-    def send_slack_only(self, alert_data: Dict) -> bool:
-        """Slack으로만 알림 발송"""
-        return self.slack_sender.send(alert_data)
-
-
-class AlertFormatter:
-    """알림 데이터를 포맷팅하는 유틸리티"""
-    
-    @staticmethod
-    def format_for_alert(
-        timestamp: str,
-        region: str,
-        indices: Dict,
-        levels: Dict,
-        recommendations: Dict,
-        emojis: Dict,
-        action_groups: Dict
-    ) -> Dict:
-        """
-        알림 데이터를 표준 형식으로 포맷팅
-        
-        Args:
-            timestamp: 타임스탬프
-            region: 지역
-            indices: 기상지수 값
-            levels: 등급
-            recommendations: 권고사항
-            emojis: 이모지
-            action_groups: 행동 그룹
-        
-        Returns:
-            표준화된 알림 데이터
-        """
-        return {
-            "timestamp": timestamp,
-            "region": region,
-            "indices": indices,
-            "levels": levels,
-            "recommendations": recommendations,
-            "emojis": emojis,
-            "action_groups": action_groups
-        }
 
 
 if __name__ == "__main__":
