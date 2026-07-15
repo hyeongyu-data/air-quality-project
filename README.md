@@ -200,6 +200,15 @@ python3 scripts/kakao_get_refresh_token.py
 python3 -m compileall producer consumer dags scripts
 ```
 
+단위 테스트(순수 판정 로직):
+
+```bash
+pip install pytest
+pytest -q
+```
+
+`master`로 향하는 PR·push는 GitHub Actions(`.github/workflows/ci.yml`)가 위 compile + pytest를 자동 실행하며, 통과가 머지 필수 조건이다.
+
 컨테이너 안에서 DAG import 확인:
 
 ```bash
