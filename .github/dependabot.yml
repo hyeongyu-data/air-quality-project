@@ -1,6 +1,7 @@
 version: 2
 updates:
-  # Python 의존성 (루트 + consumer)
+  # Python 의존성 — 루트의 requirements.txt, requirements-consumer.txt를 스캔.
+  # Dependabot pip는 지정 디렉토리의 requirements 계열 .txt를 자동 탐지한다.
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -10,7 +11,9 @@ updates:
     commit-message:
       prefix: "chore"
 
-  # Docker 베이스 이미지
+  # Dockerfile의 FROM 베이스 이미지만 스캔한다.
+  # 주의: docker-compose.yaml의 서비스 이미지(airflow/kafka/opensearch 등)는
+  # Dependabot 대상이 아니므로 별도로 태그를 수동 관리한다.
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
