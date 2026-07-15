@@ -703,7 +703,9 @@ class OpenSearchAlertSender:
                 "levels": alert_data.get("levels", {}),
                 "recommendations": alert_data.get("recommendations", {}),
                 "action_groups": list(alert_data.get("action_groups", {}).keys()),
-                "alert_severity": self._calculate_severity(alert_data)
+                "alert_severity": self._calculate_severity(alert_data),
+                # 다음 메시지의 쿨다운 비교 기준(등급 시그니처)
+                "grade_signature": alert_data.get("grade_signature", "")
             }
             
             # OpenSearch에 저장
@@ -718,7 +720,34 @@ class OpenSearchAlertSender:
         except Exception as e:
             logger.error(f"OpenSearch 저장 실패: {str(e)}")
             return False
-    
+
+    def latest_signature(self, region: str) -> Optional[str]:
+        """해당 region의 가장 최근 저장된 grade_signature 조회.
+
+        컨슈머는 매시간 재시작돼 인메모리 상태가 사라지므로 "직전 등급"은
+        durable 저장소인 OpenSearch에서 읽는다. 미연결/조회 실패 시 None을
+        반환해 호출측이 발송하도록(fail-open) 둔다 — 알림 유실을 막는다.
+        """
+        if not self.enabled or not self.client:
+            return None
+        try:
+            response = self.client.search(
+                index=f"{self.index_prefix}-*",
+                body={
+                    "size": 1,
+                    "query": {"match": {"region": region}},
+                    "sort": [{"timestamp": {"order": "desc"}}],
+                    "_source": ["grade_signature"],
+                },
+            )
+            hits = response.get("hits", {}).get("hits", [])
+            if hits:
+                return hits[0].get("_source", {}).get("grade_signature")
+            return None
+        except Exception as e:
+            logger.warning(f"직전 시그니처 조회 실패(fail-open, 발송 진행): {str(e)}")
+            return None
+
     @staticmethod
     def _calculate_severity(alert_data: Dict) -> str:
         """
@@ -761,13 +790,16 @@ class AlertManager:
         self.kakao_sender = KakaoAlertSender()
         self.opensearch_sender = OpenSearchAlertSender(opensearch_client)
     
-    def send_all(self, alert_data: Dict) -> Dict[str, bool]:
+    def send_all(self, alert_data: Dict, send_external: bool = True) -> Dict[str, bool]:
         """
         모든 활성화된 채널로 알림 발송
-        
+
         Args:
             alert_data: 알림 데이터
-        
+            send_external: False면 외부 채널(Slack/이메일/카카오) 발송을 생략한다.
+                등급 무변경(쿨다운) 시 스팸을 막되, 콘솔 출력과 OpenSearch
+                이력 저장은 감사/최신 상태 추적을 위해 항상 유지한다.
+
         Returns:
             {
                 "console": True,
@@ -779,9 +811,9 @@ class AlertManager:
         """
         results = {
             "console": self.console_sender.send(alert_data),
-            "slack": self.slack_sender.send(alert_data),
-            "email": self.email_sender.send(alert_data),
-            "kakao": self.kakao_sender.send(alert_data),
+            "slack": self.slack_sender.send(alert_data) if send_external else False,
+            "email": self.email_sender.send(alert_data) if send_external else False,
+            "kakao": self.kakao_sender.send(alert_data) if send_external else False,
             "opensearch": self.opensearch_sender.send(alert_data)
         }
         

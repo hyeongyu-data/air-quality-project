@@ -7,7 +7,7 @@
 - 권고 행동 그룹화
 """
 
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
@@ -18,6 +18,26 @@ class AlertLevel(Enum):
     NORMAL = "보통"
     BAD = "나쁨"
     VERY_BAD = "매우나쁨"
+
+
+def grade_signature(classification_objects: Dict) -> str:
+    """각 지수의 등급(AlertLevel)만 뽑아 안정적 문자열 시그니처 생성.
+
+    수치 변동엔 둔감하고 등급 변화에만 민감하다. 키를 정렬하므로
+    dict 순서가 달라도 같은 등급 조합이면 같은 시그니처가 나온다.
+    쿨다운/중복제거의 "직전 상태" 비교 기준으로 쓴다.
+    """
+    parts = []
+    for key in sorted(classification_objects):
+        level = classification_objects[key]
+        value = level.value if isinstance(level, AlertLevel) else str(level)
+        parts.append(f"{key}={value}")
+    return "|".join(parts)
+
+
+def should_send(previous_signature: Optional[str], current_signature: str) -> bool:
+    """이전 시그니처가 없거나(최초) 등급이 바뀌었을 때만 True."""
+    return previous_signature != current_signature
 
 
 @dataclass

@@ -21,11 +21,11 @@ from dotenv import load_dotenv
 
 # 상대 import
 try:
-    from .rules import AlertRuleEngine, AlertGrouping, AlertLevel
+    from .rules import AlertRuleEngine, AlertGrouping, AlertLevel, grade_signature, should_send
     from .alert import AlertManager
 except ImportError:
     # 직접 실행 시
-    from rules import AlertRuleEngine, AlertGrouping, AlertLevel
+    from rules import AlertRuleEngine, AlertGrouping, AlertLevel, grade_signature, should_send
     from alert import AlertManager
 
 # 환경변수 로드
@@ -302,10 +302,21 @@ class WeatherAlertConsumer:
             processed["action_groups"] = alert_groups
             processed["data_warnings"] = message.get("data_warnings", {})
             processed["raw_data"] = message
-            
-            # 알림 발송
-            results = self.alert_manager.send_all(processed)
-            
+
+            # 쿨다운/중복제거: 등급 시그니처가 직전과 바뀔 때만 외부 채널 발송.
+            # 직전 상태는 재시작에도 살아남는 OpenSearch에서 읽는다(fail-open).
+            current_signature = grade_signature(processed.get("classification_objects", {}))
+            processed["grade_signature"] = current_signature
+            previous_signature = self.alert_manager.opensearch_sender.latest_signature(
+                processed.get("region", "전국")
+            )
+            send_external = should_send(previous_signature, current_signature)
+            if not send_external:
+                logger.info(f"등급 무변경 → 외부 채널 발송 생략 (시그니처={current_signature})")
+
+            # 알림 발송 (등급 무변경 시 콘솔/OpenSearch 이력은 유지, 외부만 생략)
+            results = self.alert_manager.send_all(processed, send_external=send_external)
+
             self.stats["total_processed"] += 1
             if any(results.values()):
                 self.stats["total_alerts_sent"] += 1
