@@ -89,11 +89,14 @@ gh api -X PATCH repos/{owner}/{repo}/branches/master/protection/required_pull_re
 # 문법 확인
 python3 -m compileall producer consumer dags scripts
 
+# 단위 테스트 (순수 판정 로직)
+pip install pytest && pytest -q
+
 # 컨테이너 안 DAG import 확인
 docker compose exec airflow python -m py_compile /opt/airflow/dags/air_pipeline.py
 ```
 
-자세한 검증 명령은 [README](README.md#검증-명령) 참고.
+`master`로 향하는 PR·push는 GitHub Actions(`.github/workflows/ci.yml`)가 compile + pytest를 자동 실행한다. **CI 통과는 머지 필수 게이트**다(브랜치 보호의 required status check). 자세한 검증 명령은 [README](README.md#검증-명령) 참고.
 
 ## 보안 원칙
 

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: compile + pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      # 문법 검사 — 외부 의존성 없이 전 소스 컴파일
+      - name: Compile sources
+        run: python -m compileall producer consumer dags scripts
+
+      - name: Install test deps
+        run: pip install pytest
+
+      # 순수 함수 단위 테스트 (consumer/rules.py 등)
+      - name: Run tests
+        run: pytest -q
