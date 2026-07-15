@@ -2,6 +2,15 @@
 
 서울 지역의 기상/대기질 데이터를 매 시간 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
 
+## 기여 / 협업 프로세스
+
+모든 변경은 다음 흐름을 따릅니다: **Issue 등록 → 작업 브랜치 → 작업/검증 → Draft PR → 셀프 리뷰 → Ready for review → 코드 리뷰 → 승인 → Squash merge.** 기본 브랜치(`master`)에 직접 push하지 않습니다.
+
+- 협업 규칙·브랜치 네이밍·커밋 컨벤션: [CONTRIBUTING.md](CONTRIBUTING.md)
+- 비밀정보 취급·취약점 제보: [SECURITY.md](SECURITY.md)
+- Issue/PR은 `.github`의 템플릿을 사용하며, 리뷰는 CODEOWNERS로 자동 요청됩니다.
+- 의존성 취약점은 Dependabot(`.github/dependabot.yml`)이 주간 점검합니다.
+
 ## 현재 동작
 
 | 실행 시각(KST) | 알림 기준 | 주요 내용 |
