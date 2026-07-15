@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # Python 의존성 (루트 + consumer)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels: ["chore", "security"]
+    commit-message:
+      prefix: "chore"
+
+  # Docker 베이스 이미지
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["chore", "security"]
+    commit-message:
+      prefix: "chore"
+
+  # GitHub Actions (추후 CI 추가 대비)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels: ["chore"]
+    commit-message:
+      prefix: "chore"

@@ -1,0 +1,17 @@
+# 코드 소유자 — PR 생성 시 리뷰가 자동 요청됩니다.
+# 참고: https://docs.github.com/articles/about-code-owners
+
+# 기본 소유자
+*                       @hyeongyu-data
+
+# 데이터 수집/파이프라인
+/producer/              @hyeongyu-data
+/consumer/              @hyeongyu-data
+/dags/                  @hyeongyu-data
+/glue_jobs/             @hyeongyu-data
+
+# 인프라/설정 (민감) — 변경 시 반드시 소유자 리뷰
+/docker-compose.yaml    @hyeongyu-data
+/Dockerfile             @hyeongyu-data
+/.github/               @hyeongyu-data
+/SECURITY.md            @hyeongyu-data
