@@ -64,6 +64,25 @@ fix: 자외선지수 KST 기준 시간 계산 오류 수정
   - CODEOWNERS 소유자가 최종 확인 후 머지한다.
 - collaborator가 늘면 브랜치 보호 규칙에서 `required approving reviews`를 2로 올린다.
 
+### 현재 활성 브랜치 보호 (`master`)
+
+| 규칙 | 상태 |
+| --- | --- |
+| PR 없이 직접 push | 차단 (PR 필수) |
+| 필수 승인 수 | 0 (솔로 락 방지 — 팀원 증가 시 2로 상향) |
+| 오래된 리뷰 자동 dismiss | 켜짐 |
+| 대화(코멘트) 해결 필수 | 켜짐 |
+| linear history (squash 정합) | 켜짐 |
+| force push / 브랜치 삭제 | 차단 |
+| admin도 규칙 강제(`enforce_admins`) | 켜짐 (admin도 PR 경유 — 직접 push 차단) |
+
+승인 수를 2로 올리려면(팀원 확보 후):
+
+```bash
+gh api -X PATCH repos/{owner}/{repo}/branches/master/protection/required_pull_request_reviews \
+  -F required_approving_review_count=2
+```
+
 ## 로컬 검증
 
 ```bash
