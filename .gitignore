@@ -214,8 +214,6 @@ __marimo__/
 # git rm -r --cached logs/
 logs/
 logs/**
-sensor_logs/
-sensor_logs/**
 
 # OS/editor noise
 .DS_Store

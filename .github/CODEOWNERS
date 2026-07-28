@@ -8,7 +8,6 @@
 /producer/              @hyeongyu-data
 /consumer/              @hyeongyu-data
 /dags/                  @hyeongyu-data
-/glue_jobs/             @hyeongyu-data
 
 # 인프라/설정 (민감) — 변경 시 반드시 소유자 리뷰
 /docker-compose.yaml    @hyeongyu-data
