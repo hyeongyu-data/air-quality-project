@@ -121,7 +121,7 @@ services:
       AIRFLOW__API__MAXIMUM_PAGE_LIMIT: 100
       
       # 추가 패키지 설치
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python opensearch-py pandas python-dotenv"
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python opensearch-py python-dotenv"
       
       # 외부 서비스 주소 (컨테이너 내부에서 접근)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
