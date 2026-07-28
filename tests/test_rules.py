@@ -31,9 +31,10 @@ def test_uv_boundaries():
 
 
 def test_special_notice_string_logic():
+    # "없음"(특보 없음 확인)과 "정보없음"(수집 실패)은 다른 상태다 — #33
     assert E.classify_special_notice("없음")[0] is L.GOOD
-    assert E.classify_special_notice("정보없음")[0] is L.GOOD
-    assert E.classify_special_notice("")[0] is L.GOOD
+    assert E.classify_special_notice("정보없음")[0] is L.UNKNOWN
+    assert E.classify_special_notice("")[0] is L.UNKNOWN
     assert E.classify_special_notice("강풍")[0] is L.BAD
 
 
