@@ -25,7 +25,9 @@ jobs:
         run: python -m compileall producer consumer dags scripts
 
       - name: Install test deps
-        run: pip install pytest
+        # consumer/alert.py가 requests와 python-dotenv를 import 한다.
+        # 없으면 카카오 토큰 테스트가 조용히 skip되므로 명시적으로 설치한다.
+        run: pip install pytest requests python-dotenv
 
       # 순수 함수 단위 테스트 (consumer/rules.py 등)
       - name: Run tests
