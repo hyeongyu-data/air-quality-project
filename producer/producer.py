@@ -31,6 +31,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+try:
+    from .masking import mask_secrets, install_secret_filter
+except ImportError:  # 직접 실행 시
+    from masking import mask_secrets, install_secret_filter
+
+# 값 생성 지점 마스킹의 안전망. 이후 누가 URL을 그대로 로깅해도 출력 단계에서 걸린다.
+install_secret_filter()
+
 
 class WeatherAPIClient:
     """기상청 공공API 클라이언트"""
@@ -132,7 +140,7 @@ class WeatherAPIClient:
         
         response = requests.get(url, params=params, timeout=self.timeout)
         if response.status_code >= 400:
-            self.last_error = f"{response.status_code} {response.text[:120]}"
+            self.last_error = mask_secrets(f"{response.status_code} {response.text[:120]}")
             logger.warning(f"기상청 API 응답 오류: {self.last_error}")
             return []
         
@@ -142,7 +150,7 @@ class WeatherAPIClient:
             data = self._parse_xml_response(response.text)
         
         if not self._is_success_response(data):
-            self.last_error = str(data.get("response", {}).get("header", data))[:200]
+            self.last_error = mask_secrets(str(data.get("response", {}).get("header", data))[:200])
             logger.warning(f"기상청 API 오류: {data}")
             return []
         
@@ -508,7 +516,7 @@ class AirKoreaAPIClient:
                 response = requests.get(url, params=base_params, timeout=self.timeout)
                 break
             except requests.exceptions.RequestException as e:
-                self.last_error = f"{service_name} 연결 실패: {str(e)}"
+                self.last_error = mask_secrets(f"{service_name} 연결 실패: {str(e)}")
                 if attempt == 0:
                     logger.warning(f"에어코리아 API 재시도: {self.last_error}")
                     continue
@@ -519,7 +527,7 @@ class AirKoreaAPIClient:
             return []
         if response.status_code in (401, 403):
             self.last_error = (
-                f"에어코리아 API 인증/활용신청 권한 오류. "
+                "에어코리아 API 인증/활용신청 권한 오류. "
                 f"현재 공공데이터 서비스키에 {service_name} 활용 권한이 있는지 확인하세요."
             )
             if optional:
@@ -528,7 +536,7 @@ class AirKoreaAPIClient:
                 logger.warning(self.last_error)
             return []
         if response.status_code >= 400:
-            self.last_error = f"{service_name} {response.status_code} {response.text[:120]}"
+            self.last_error = mask_secrets(f"{service_name} {response.status_code} {response.text[:120]}")
             logger.warning(f"에어코리아 API 응답 오류: {self.last_error}")
             return []
         
@@ -538,7 +546,7 @@ class AirKoreaAPIClient:
             data = self._parse_xml_response(response.text)
         
         if not self._is_success_response(data):
-            self.last_error = str(data.get("response", {}).get("header", data))[:200]
+            self.last_error = mask_secrets(str(data.get("response", {}).get("header", data))[:200])
             logger.warning(f"에어코리아 API 오류({service_name}): {data}")
             return []
         
@@ -585,7 +593,7 @@ class AirKoreaAPIClient:
                 return None
                 
         except requests.exceptions.RequestException as e:
-            self.last_error = str(e)
+            self.last_error = mask_secrets(str(e))
             logger.error(f"에어코리아 API 호출 실패: {str(e)}")
             return None
         except Exception as e:
@@ -782,14 +790,14 @@ class KMAForecastAPIClient:
         }
         response = requests.get(url, params=params, timeout=self.timeout)
         if response.status_code >= 400:
-            self.last_error = f"{response.status_code} {response.text[:120]}"
+            self.last_error = mask_secrets(f"{response.status_code} {response.text[:120]}")
             logger.warning(f"단기예보 API 응답 오류: {self.last_error}")
             return []
         response.raise_for_status()
         data = response.json()
         
         if not self._is_success_response(data):
-            self.last_error = str(data.get("response", {}).get("header", data))[:200]
+            self.last_error = mask_secrets(str(data.get("response", {}).get("header", data))[:200])
             logger.warning(f"단기예보 API 오류: {data}")
             return []
         

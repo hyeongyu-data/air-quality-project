@@ -302,7 +302,13 @@ class WeatherAlertConsumer:
             if not message:
                 return False
             
-            logger.info(f"메시지 수신: {json.dumps(message, ensure_ascii=False)}")
+            # 페이로드 전문을 찍으면 로그 볼륨이 커지고, data_warnings에 실려 온
+            # 외부 API 오류 문자열까지 그대로 남는다. 식별에 필요한 것만 남긴다.
+            logger.info(
+                "메시지 수신: region=%s timestamp=%s warnings=%s",
+                message.get("region"), message.get("timestamp"),
+                list(message.get("data_warnings", {}).keys()),
+            )
 
             # seoul-weather 토픽은 현재 기상 통합 데이터만 발행된다
             processed = self.processor.process_current_weather(message)
