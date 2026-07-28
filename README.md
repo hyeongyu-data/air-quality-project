@@ -2,6 +2,12 @@
 
 서울 지역의 기상/대기질 데이터를 매 시간 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
 
+## 프로젝트 현황
+
+- 진단·결함 인벤토리·개선 순서 한눈에 보기: [docs/dashboard.html](docs/dashboard.html)
+- 운영 리스크와 개선 방안(코드 근거 포함): [docs/operational-risks.md](docs/operational-risks.md)
+- 아키텍처 결정 기록: [docs/adr/](docs/adr/)
+
 ## 기여 / 협업 프로세스
 
 모든 변경은 다음 흐름을 따릅니다: **Issue 등록 → 작업 브랜치 → 작업/검증 → Draft PR → 셀프 리뷰 → Ready for review → 코드 리뷰 → 승인 → Squash merge.** 기본 브랜치(`master`)에 직접 push하지 않습니다.
