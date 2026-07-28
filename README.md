@@ -48,6 +48,8 @@ Airflow는 데이터를 수집해 Kafka에 발행합니다. Consumer는 Kafka �
 | OpenSearch | `opensearchproject/opensearch:2.8.0` | 알림 이력 저장/검색 |
 | Kafka UI | `provectuslabs/kafka-ui:latest` | Kafka 토픽 확인 |
 
+의존성 파일에는 소스에서 직접 사용하는 패키지만 명시합니다. Airflow 컨테이너의 추가 패키지와 Consumer 이미지 의존성은 각각 `docker-compose.yaml`, `requirements-consumer.txt`에서 관리합니다.
+
 ## 주요 파일
 
 ```text

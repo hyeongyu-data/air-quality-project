@@ -2,4 +2,3 @@ kafka-python==3.0.8
 requests==2.34.2
 opensearch-py==3.2.0
 python-dotenv==1.0.0
-python-dateutil==2.8.2
