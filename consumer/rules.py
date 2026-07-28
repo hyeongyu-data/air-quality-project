@@ -64,6 +64,27 @@ def should_send(previous_signature: Optional[str], current_signature: str) -> bo
     return previous_signature != current_signature
 
 
+def should_record_signature(
+    send_external: bool,
+    external_enabled: bool,
+    delivered_channels: List[str],
+) -> bool:
+    """이번 등급을 "알렸다"고 기록해도 되는지 판단.
+
+    쿨다운은 저장된 시그니처를 "이 등급은 이미 알렸다"는 뜻으로 읽는다.
+    그런데 발송 결과와 무관하게 기록하면, SMTP 만료나 카카오 토큰 만료로
+    전 채널이 실패한 순간의 등급이 그대로 굳어 등급이 유지되는 동안
+    알림이 영구히 사라진다. 채널이 복구돼도 마찬가지다.
+
+    - 발송을 시도하지 않았으면(쿨다운/근거 부족) 상태는 그대로 유지한다.
+    - 활성화된 외부 채널이 하나도 없으면 애초에 전달할 대상이 없으므로 기록한다.
+    - 시도했고 대상이 있었는데 전부 실패했다면 기록하지 않는다 -> 다음 회차 재시도.
+    """
+    if not send_external or not external_enabled:
+        return True
+    return bool(delivered_channels)
+
+
 @dataclass
 class AlertRule:
     """단일 알림 규칙"""

@@ -12,6 +12,11 @@ import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict, List, Optional
+
+try:
+    from .rules import should_record_signature
+except ImportError:  # 직접 실행 시
+    from rules import should_record_signature
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
@@ -674,13 +679,16 @@ class OpenSearchAlertSender:
         self.index_prefix = os.getenv("OPENSEARCH_INDEX_PREFIX", "weather-alert")
         self.enabled = True if opensearch_client else False
     
-    def send(self, alert_data: Dict) -> bool:
+    def send(self, alert_data: Dict, record_signature: bool = True) -> bool:
         """
         OpenSearch에 알림 데이터 저장
-        
+
         Args:
             alert_data: 알림 데이터
-        
+            record_signature: False면 등급 시그니처를 비워 저장한다. 외부 발송이
+                전부 실패했을 때 "알렸다"고 기록하지 않기 위한 장치다.
+                이력 자체는 남겨야 사후 조사가 가능하므로 문서는 그대로 쓴다.
+
         Returns:
             bool: 저장 성공 여부
         """
@@ -704,8 +712,11 @@ class OpenSearchAlertSender:
                 "recommendations": alert_data.get("recommendations", {}),
                 "action_groups": list(alert_data.get("action_groups", {}).keys()),
                 "alert_severity": self._calculate_severity(alert_data),
-                # 다음 메시지의 쿨다운 비교 기준(등급 시그니처)
-                "grade_signature": alert_data.get("grade_signature", "")
+                # 다음 메시지의 쿨다운 비교 기준(등급 시그니처).
+                # 외부 발송이 전부 실패했다면 비워 둬서 다음 회차에 재시도하게 한다.
+                "grade_signature": alert_data.get("grade_signature", "") if record_signature else "",
+                "delivered_channels": alert_data.get("delivered_channels", []),
+                "signature_recorded": record_signature,
             }
             
             # OpenSearch에 저장
@@ -809,17 +820,45 @@ class AlertManager:
                 "opensearch": True
             }
         """
-        results = {
-            "console": self.console_sender.send(alert_data),
+        console_ok = self.console_sender.send(alert_data)
+
+        external = {
             "slack": self.slack_sender.send(alert_data) if send_external else False,
             "email": self.email_sender.send(alert_data) if send_external else False,
             "kakao": self.kakao_sender.send(alert_data) if send_external else False,
-            "opensearch": self.opensearch_sender.send(alert_data)
         }
-        
-        success_count = sum(1 for v in results.values() if v)
-        logger.info(f"알림 발송 결과: {success_count}/{len(results)} 채널 성공")
-        
+        delivered = [name for name, ok in external.items() if ok]
+        alert_data["delivered_channels"] = delivered
+
+        external_enabled = any(
+            sender.enabled
+            for sender in (self.slack_sender, self.email_sender, self.kakao_sender)
+        )
+        record = should_record_signature(send_external, external_enabled, delivered)
+        if not record:
+            enabled_names = [
+                name for name, sender in (
+                    ("slack", self.slack_sender),
+                    ("email", self.email_sender),
+                    ("kakao", self.kakao_sender),
+                ) if sender.enabled
+            ]
+            logger.error(
+                "외부 채널 전량 발송 실패 → 등급 시그니처를 기록하지 않는다(다음 회차 재시도). "
+                f"활성 채널={enabled_names}"
+            )
+
+        results = {
+            "console": console_ok,
+            **external,
+            "opensearch": self.opensearch_sender.send(alert_data, record_signature=record),
+        }
+
+        if send_external:
+            logger.info(f"외부 채널 발송 결과: {len(delivered)}/{len(external)} 성공 {delivered}")
+        else:
+            logger.info("외부 채널 발송 생략(쿨다운 또는 판정 근거 부족)")
+
         return results
 
 

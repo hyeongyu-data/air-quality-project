@@ -341,7 +341,8 @@ class WeatherAlertConsumer:
             results = self.alert_manager.send_all(processed, send_external=send_external)
 
             self.stats["total_processed"] += 1
-            if any(results.values()):
+            # 콘솔은 항상 성공하므로 카운터에 넣으면 외부 발송이 전멸해도 증가한다.
+            if any(results.get(channel) for channel in ("slack", "email", "kakao")):
                 self.stats["total_alerts_sent"] += 1
             
             logger.info(f"메시지 처리 완료: {processed.get('region')}")
