@@ -124,8 +124,12 @@ def main():
 
     print("\n발급 성공. .env에 아래 값을 넣으세요.")
     print(f"KAKAO_REFRESH_TOKEN={token_data.get('refresh_token', '')}")
-    print("\n전체 응답:")
-    print(json.dumps(token_data, ensure_ascii=False, indent=2))
+    # 전체 응답에는 access_token까지 들어 있다. 터미널 스크롤백과 셸 히스토리에
+    # 남기지 않도록 만료 정보만 출력한다.
+    print(
+        f"\n(access_token 만료 {token_data.get('expires_in')}초, "
+        f"refresh_token 만료 {token_data.get('refresh_token_expires_in')}초)"
+    )
 
 
 if __name__ == "__main__":
