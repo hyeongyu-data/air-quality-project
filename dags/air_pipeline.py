@@ -22,10 +22,13 @@ import logging
 from typing import Dict
 import pendulum
 
+import requests
+
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.exceptions import AirflowException
 from dotenv import load_dotenv
+
 
 # 환경변수 로드
 load_dotenv()
@@ -37,6 +40,33 @@ logger = logging.getLogger(__name__)
 # DAG 기본 설정
 # ============================================================================
 
+DAG_ID = "realtime_weather_alert"
+
+
+def notify_failure(context) -> None:
+    """태스크 실패를 사람에게 알린다.
+
+    이 콜백이 없으면 수집·발행이 실패해도 Airflow UI 밖에서는 아무도 모른다.
+    email_on_failure는 SMTP 설정에 의존하므로, 이미 쓰고 있는 Slack Webhook을
+    재사용한다. 통보 자체가 실패해도 태스크 실패 처리를 방해하지 않는다.
+    """
+    task_instance = context.get("task_instance")
+    task_id = getattr(task_instance, "task_id", "unknown")
+    run_at = context.get("logical_date") or context.get("data_interval_end")
+    reason = context.get("exception")
+    message = f"[DAG 실패] {DAG_ID}.{task_id} ({run_at}) - {reason}"
+
+    logger.error(message)
+
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+    if os.getenv("SLACK_ENABLED", "false").lower() != "true" or not webhook_url:
+        return
+    try:
+        requests.post(webhook_url, json={"text": message}, timeout=5)
+    except Exception as e:
+        logger.error(f"실패 통보 발송 실패: {str(e)}")
+
+
 DEFAULT_ARGS = {
     "owner": "weather-team",
     "retries": 2,
@@ -44,9 +74,8 @@ DEFAULT_ARGS = {
     "execution_timeout": timedelta(minutes=15),
     "email_on_failure": False,
     "email_on_retry": False,
+    "on_failure_callback": notify_failure,
 }
-
-DAG_ID = "realtime_weather_alert"
 
 local_tz = pendulum.timezone("Asia/Seoul")
 
@@ -136,10 +165,16 @@ def fetch_current_weather_data(**context) -> Dict:
         
         try:
             from producer.producer import WeatherDataCollector
+            from producer.contract import (
+                collected_index_count, is_publishable, missing_index_keys,
+            )
         except ImportError:
             import sys
             sys.path.insert(0, "/opt/airflow")
             from producer.producer import WeatherDataCollector
+            from producer.contract import (
+                collected_index_count, is_publishable, missing_index_keys,
+            )
         
         run_dt = context.get("data_interval_end") or pendulum.now(local_tz)
         run_hour = run_dt.in_timezone(local_tz).hour if hasattr(run_dt, "in_timezone") else datetime.now().hour
@@ -147,15 +182,21 @@ def fetch_current_weather_data(**context) -> Dict:
         current_weather = collector.collect_scheduled_weather(region="서울", run_hour=run_hour)
         collector.close()
         
-        if not current_weather:
-            logger.warning("서울 오늘 기상 예보 통합 데이터 수집 실패")
-            return {
-                "status": "failed",
-                "region": "서울",
-                "data": None
-            }
-        
-        logger.info(f"서울 기상 알림 데이터 수집 성공: {json.dumps(current_weather, ensure_ascii=False)}")
+        # 값을 하나도 받지 못한 결과는 발행해도 알릴 것이 없다.
+        # 성공으로 반환하면 다음 태스크가 빈 페이로드를 발행하고 DAG는 초록색으로
+        # 끝나므로, 여기서 실패시켜 retry와 실패 통보가 실제로 동작하게 한다.
+        if not is_publishable(current_weather):
+            raise AirflowException(
+                "수집된 기상 지수가 하나도 없습니다 "
+                f"(결측: {missing_index_keys(current_weather)}, "
+                f"경고: {(current_weather or {}).get('data_warnings', {})})"
+            )
+
+        collected = collected_index_count(current_weather)
+        missing = missing_index_keys(current_weather)
+        if missing:
+            logger.warning(f"부분 결측 수집: {collected}개 수집, 결측 {missing}")
+        logger.info(f"서울 기상 알림 데이터 수집 성공({collected}개 지수)")
         context["task_instance"].xcom_push(
             key="current_weather_data",
             value=current_weather
@@ -167,6 +208,8 @@ def fetch_current_weather_data(**context) -> Dict:
             "data": current_weather
         }
         
+    except AirflowException:
+        raise
     except Exception as e:
         logger.error(f"서울 오늘 기상 예보 통합 데이터 수집 오류: {str(e)}")
         raise AirflowException(f"Failed to fetch daily weather forecast data: {str(e)}")
@@ -209,35 +252,30 @@ def publish_to_kafka(**context) -> Dict:
         
         published_count = 0
         
-        if current_weather:
-            if producer.send_current_weather(current_weather):
+        try:
+            if current_weather and producer.send_current_weather(current_weather):
                 published_count += 1
-                logger.info("✅ 서울 오늘 기상 예보 통합 데이터 발행 성공")
-            else:
-                logger.warning("❌ 서울 오늘 기상 예보 통합 데이터 발행 실패")
-            
+                logger.info("서울 오늘 기상 예보 통합 데이터 발행 성공")
+        finally:
             producer.flush()
             producer.close()
-            
-            logger.info(f"Kafka 발행 완료: {published_count}개 메시지 발행")
-            return {
-                "status": "success",
-                "published_messages": published_count
-            }
-        
-        logger.warning("발행할 서울 오늘 기상 예보 데이터가 없습니다.")
-        
-        # 버퍼 플러시
-        producer.flush()
-        producer.close()
-        
+
+        # 발행 0건은 "알림이 나가지 않았다"는 뜻이다. success로 반환하면
+        # 종일 알림이 없어도 Airflow UI는 전부 초록색으로 남는다.
+        if published_count == 0:
+            raise AirflowException(
+                "Kafka에 발행된 메시지가 없습니다 "
+                f"(XCom 데이터 {'있음' if current_weather else '없음'})"
+            )
+
         logger.info(f"Kafka 발행 완료: {published_count}개 메시지 발행")
-        
         return {
             "status": "success",
             "published_messages": published_count
         }
-        
+
+    except AirflowException:
+        raise
     except Exception as e:
         logger.error(f"Kafka 발행 오류: {str(e)}")
         raise AirflowException(f"Failed to publish to Kafka: {str(e)}")
