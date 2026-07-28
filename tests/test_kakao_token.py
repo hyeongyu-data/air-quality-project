@@ -8,15 +8,16 @@ alert 모듈은 kafka/opensearch를 import 하지 않으므로 requests만 있�
 단독 테스트가 가능하다. 없으면 스킵한다.
 """
 import json
-import os
 
 import pytest
 
 pytest.importorskip("requests", reason="alert 모듈이 requests에 의존")
+pytest.importorskip("dotenv", reason="alert 모듈이 python-dotenv에 의존")
 
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from consumer.alert import KakaoAlertSender  # noqa: E402
+# consumer 패키지가 아니라 최상위 모듈로 가져온다. consumer/__init__.py는
+# consumer.py를 통해 kafka를 import 하는데, 이 테스트에는 필요 없는 의존성이다.
+# (pytest.ini의 pythonpath = consumer producer)
+from alert import KakaoAlertSender  # noqa: E402
 
 
 @pytest.fixture
