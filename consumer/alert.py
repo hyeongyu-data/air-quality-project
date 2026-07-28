@@ -11,6 +11,7 @@ import logging
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import Dict, List, Optional
 
 try:
@@ -30,6 +31,11 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+# refresh token 잔여 기간이 이 값 아래로 내려가면 경고한다(기본 7일).
+KAKAO_REFRESH_EXPIRY_WARN_SECONDS = int(
+    os.getenv("KAKAO_REFRESH_EXPIRY_WARN_SECONDS", 7 * 24 * 3600)
+)
 
 
 class ConsoleAlertSender:
@@ -578,12 +584,53 @@ class EmailAlertSender:
 class KakaoAlertSender:
     """카카오톡 나에게 보내기로 알림을 발송하는 클래스"""
     
+    # refresh token 회전 값을 담아 두는 상태 파일. 컨슈머는 매시간 재시작하므로
+    # 메모리에만 두면 회전된 토큰이 그때마다 사라진다.
+    DEFAULT_STATE_PATH = ".kakao_token.json"
+
     def __init__(self):
         """카카오 API 설정 초기화"""
         self.enabled = os.getenv("KAKAO_ENABLED", "false").lower() == "true"
         self.rest_api_key = os.getenv("KAKAO_REST_API_KEY")
-        self.refresh_token = os.getenv("KAKAO_REFRESH_TOKEN")
         self.client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+        self.state_path = Path(
+            os.getenv("KAKAO_TOKEN_STATE_PATH", self.DEFAULT_STATE_PATH)
+        )
+        # 회전으로 저장해 둔 토큰이 있으면 그쪽이 최신이다.
+        self.refresh_token = self._load_refresh_token() or os.getenv("KAKAO_REFRESH_TOKEN")
+
+    def _load_refresh_token(self) -> Optional[str]:
+        """상태 파일에 저장된 refresh token을 읽는다. 실패는 무시하고 env로 폴백."""
+        try:
+            if not self.state_path.exists():
+                return None
+            saved = json.loads(self.state_path.read_text(encoding="utf-8"))
+            return saved.get("refresh_token") or None
+        except Exception as e:
+            logger.warning(f"카카오 토큰 상태 파일 읽기 실패(환경변수로 폴백): {str(e)}")
+            return None
+
+    def _store_refresh_token(self, refresh_token: str, expires_in=None) -> None:
+        """회전된 refresh token을 상태 파일에 저장한다."""
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            self.state_path.write_text(
+                json.dumps(
+                    {"refresh_token": refresh_token,
+                     "refresh_token_expires_in": expires_in},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            os.chmod(self.state_path, 0o600)
+            self.refresh_token = refresh_token
+            logger.info(f"카카오 refresh token 회전 값을 저장했습니다: {self.state_path}")
+        except Exception as e:
+            # 저장에 실패해도 이번 발송은 진행한다. 다만 다음 만료 때 끊기므로 크게 남긴다.
+            logger.error(
+                f"카카오 refresh token 저장 실패 — 토큰 만료 시 알림이 중단됩니다: {str(e)}"
+            )
+
     
     def send(self, alert_data: Dict) -> bool:
         """
@@ -657,8 +704,22 @@ class KakaoAlertSender:
         )
         response.raise_for_status()
         token_data = response.json()
-        if token_data.get("refresh_token"):
-            logger.info("카카오 refresh token이 새로 발급되었습니다. .env의 KAKAO_REFRESH_TOKEN 갱신이 필요합니다.")
+
+        # 카카오는 refresh token의 잔여 유효기간이 짧아지면 갱신 응답에 새 토큰을
+        # 함께 준다. 이걸 버리면 기존 토큰 만료 시점에 알림이 영구 중단된다.
+        rotated = token_data.get("refresh_token")
+        if rotated:
+            self._store_refresh_token(
+                rotated, token_data.get("refresh_token_expires_in")
+            )
+
+        remaining = token_data.get("refresh_token_expires_in")
+        if isinstance(remaining, (int, float)) and remaining < KAKAO_REFRESH_EXPIRY_WARN_SECONDS:
+            logger.warning(
+                f"카카오 refresh token 만료 임박: 약 {int(remaining) // 86400}일 남음. "
+                "scripts/kakao_get_refresh_token.py로 재발급이 필요합니다."
+            )
+
         access_token = token_data.get("access_token")
         if not access_token:
             raise RuntimeError("Kakao access_token was not returned")
