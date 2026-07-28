@@ -21,11 +21,17 @@ from dotenv import load_dotenv
 
 # 상대 import
 try:
-    from .rules import AlertRuleEngine, AlertGrouping, AlertLevel, grade_signature, should_send
+    from .rules import (
+        AlertRuleEngine, AlertGrouping, AlertLevel,
+        grade_signature, should_send, core_indices_unknown,
+    )
     from .alert import AlertManager
 except ImportError:
     # 직접 실행 시
-    from rules import AlertRuleEngine, AlertGrouping, AlertLevel, grade_signature, should_send
+    from rules import (
+        AlertRuleEngine, AlertGrouping, AlertLevel,
+        grade_signature, should_send, core_indices_unknown,
+    )
     from alert import AlertManager
 
 # 환경변수 로드
@@ -73,7 +79,13 @@ class WeatherDataProcessor:
     """기상 데이터 처리 및 판정"""
     
     @staticmethod
-    def _safe_float(value, default: float = 0) -> float:
+    def _safe_float(value, default: Optional[float] = None) -> Optional[float]:
+        """결측은 결측으로 남긴다.
+
+        기본값을 0으로 두면 프로듀서가 정직하게 보낸 None이 실측값 0으로
+        둔갑한다. 판정 규칙은 None을 받으면 UNKNOWN을 돌려주므로 결측이
+        등급 체계 안에서 그대로 표현된다.
+        """
         if value in (None, "", "-"):
             return default
         try:
@@ -93,7 +105,7 @@ class WeatherDataProcessor:
         pm25_val = WeatherDataProcessor._safe_float(data.get("pm25"))
         dust_val = WeatherDataProcessor._safe_float(data.get("yellow_dust"))
         feels_like_val = WeatherDataProcessor._safe_float(data.get("feels_like_temp"))
-        special_notice_val = data.get("other_special_notice", "정보없음")
+        special_notice_val = data.get("other_special_notice")
         precipitation_val = WeatherDataProcessor._safe_float(data.get("precipitation_probability"))
         uv_val = WeatherDataProcessor._safe_float(data.get("uv_index"))
         
@@ -305,12 +317,23 @@ class WeatherAlertConsumer:
 
             # 쿨다운/중복제거: 등급 시그니처가 직전과 바뀔 때만 외부 채널 발송.
             # 직전 상태는 재시작에도 살아남는 OpenSearch에서 읽는다(fail-open).
-            current_signature = grade_signature(processed.get("classification_objects", {}))
+            classification_objects = processed.get("classification_objects", {})
+
+            # 핵심 지수가 전부 결측이면 사용자에게 보낼 근거가 없다.
+            # 콘솔/OpenSearch 이력은 남겨 운영자가 결측을 추적할 수 있게 한다.
+            core_missing = core_indices_unknown(classification_objects)
+            if core_missing:
+                logger.warning(
+                    "핵심 지수(미세먼지/초미세먼지) 전량 결측 → 외부 채널 발송 보류. "
+                    f"data_warnings={message.get('data_warnings', {})}"
+                )
+
+            current_signature = grade_signature(classification_objects)
             processed["grade_signature"] = current_signature
             previous_signature = self.alert_manager.opensearch_sender.latest_signature(
                 processed.get("region", "전국")
             )
-            send_external = should_send(previous_signature, current_signature)
+            send_external = should_send(previous_signature, current_signature) and not core_missing
             if not send_external:
                 logger.info(f"등급 무변경 → 외부 채널 발송 생략 (시그니처={current_signature})")
 

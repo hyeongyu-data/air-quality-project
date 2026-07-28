@@ -18,6 +18,30 @@ class AlertLevel(Enum):
     NORMAL = "보통"
     BAD = "나쁨"
     VERY_BAD = "매우나쁨"
+    UNKNOWN = "정보없음"
+
+
+# 수집 실패로 값이 없을 때의 판정 결과.
+# 결측을 0으로 치환하면 "체감온도 0℃ → 동상 위험" 같은 오탐이나
+# "미세먼지 0 → 외출 자유" 같은 거짓 안전 신호가 나간다. 모른다를
+# 괜찮다로도 위험하다로도 바꾸지 않고, 모른다로 그대로 전달한다.
+UNKNOWN_RESULT = (AlertLevel.UNKNOWN, "데이터 수집 실패로 판정할 수 없음", "❔")
+
+
+# 이 둘이 모두 결측이면 알림의 핵심 근거가 사라진다고 본다.
+CORE_INDICES = ("pm10", "pm25")
+
+
+def core_indices_unknown(classification_objects: Dict) -> bool:
+    """핵심 지수(미세먼지/초미세먼지)가 전부 결측인지 판단.
+
+    키가 아예 없는 경우도 결측으로 본다. 값을 못 받은 것과 항목이 빠진 것은
+    "근거가 없다"는 점에서 같고, 근거 없이 외부 알림을 보내지 않는 쪽이 안전하다.
+    """
+    return all(
+        classification_objects.get(key) in (None, AlertLevel.UNKNOWN)
+        for key in CORE_INDICES
+    )
 
 
 def grade_signature(classification_objects: Dict) -> str:
@@ -297,9 +321,15 @@ class AlertRuleEngine:
         return AlertRuleEngine._classify(value, WeatherIndexRules.PRECIPITATION_RULES)
     
     @staticmethod
-    def classify_special_notice(value: str) -> Tuple[AlertLevel, str, str]:
-        """기타특보성 신호 판정"""
-        if value and value not in ["없음", "정보없음"]:
+    def classify_special_notice(value: Optional[str]) -> Tuple[AlertLevel, str, str]:
+        """기타특보성 신호 판정.
+
+        프로듀서는 특보 없음을 "없음", 수집 실패를 "정보없음"으로 구분해 보낸다.
+        후자를 "좋음"으로 읽으면 확인하지 못한 상태가 안전 신호가 되므로 분리한다.
+        """
+        if value in (None, "", "정보없음"):
+            return UNKNOWN_RESULT
+        if value != "없음":
             return AlertLevel.BAD, "특보성 신호 확인 | 최신 기상정보 확인 권고", "⚠️"
         return AlertLevel.GOOD, "특보성 신호 없음", "😊"
     
@@ -310,7 +340,7 @@ class AlertRuleEngine:
     
     @staticmethod
     def _classify(
-        value: float, 
+        value: Optional[float],
         rules: List[AlertRule]
     ) -> Tuple[AlertLevel, str, str]:
         """
@@ -323,6 +353,9 @@ class AlertRuleEngine:
         Returns:
             (등급, 권고사항, 이모지)
         """
+        if value is None:
+            return UNKNOWN_RESULT
+
         for rule in rules:
             if value <= rule.max_value:
                 return rule.level, rule.recommendation, rule.emoji
@@ -496,6 +529,20 @@ class AlertGrouping:
         if activated_groups:
             return activated_groups
         
+        # 활성화된 그룹이 없을 때, 결측이 섞여 있으면 "정상"이라고 말할 수 없다.
+        if any(level is AlertLevel.UNKNOWN for level in classification_results.values()):
+            unknown_keys = [
+                key for key, level in classification_results.items()
+                if level is AlertLevel.UNKNOWN
+            ]
+            return {"정보부족": {
+                "description": "일부 지수를 수집하지 못해 판정할 수 없음",
+                "conditions": [],
+                "action": "수집 실패 항목은 기상청·에어코리아에서 직접 확인 권고",
+                "color": "❔",
+                "reasons": [f"수집 실패: {', '.join(sorted(unknown_keys))}"],
+            }}
+
         normal_info = {
             "description": "모든 지수가 정상범위",
             "conditions": [],
