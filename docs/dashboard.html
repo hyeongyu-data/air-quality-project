@@ -161,6 +161,14 @@ section{margin-top:56px}
 .row.s1{border-left-color:var(--g-bad)}
 .row.s2{border-left-color:var(--g-normal)}
 .row.s3{border-left-color:var(--g-good)}
+.row.done{border-left-color:var(--g-good); background:color-mix(in srgb, var(--g-good) 6%, transparent)}
+.row.done .what b{text-decoration:line-through; text-decoration-color:var(--ink-3); opacity:.75}
+.row .fixed{
+  display:inline-block; margin-left:8px; vertical-align:middle;
+  font-family:var(--f-mono); font-size:10px; font-weight:700; letter-spacing:.06em;
+  color:var(--g-good); border:1px solid currentColor; border-radius:3px; padding:1px 5px;
+  text-decoration:none; opacity:1;
+}
 @media (max-width:660px){
   .row{grid-template-columns:56px minmax(0,1fr)}
   .row .where{grid-column:2; padding-top:0}
@@ -239,7 +247,7 @@ footer{
     <div class="meta">
       <span>진단일 2026-07-29</span>
       <span>검토 대상 5,077 LOC</span>
-      <span>등록 이슈 36건</span>
+      <span>등록 이슈 36건 · 해결 14건</span>
       <span><a href="https://github.com/hyeongyu-data/air-quality-project">github.com/hyeongyu-data/air-quality-project</a></span>
     </div>
   </header>
@@ -287,35 +295,59 @@ footer{
 
       <div class="band">
         <header>
-          <span class="chip g0">매우나쁨 · P0</span>
-          <h3>사용자에게 틀린 정보가 나가거나, 알림이 영구히 사라진다</h3>
-          <span class="count num">6건</span>
+          <span class="chip g3">해결됨</span>
+          <h3>이번 회차에 고치고 머지한 것</h3>
+          <span class="count num">5건</span>
         </header>
         <div class="rows">
-          <div class="row s0">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/33">#33</a></span>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/33">#33</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/58">PR #58</a>
             <div class="what">
               <b>결측값을 0으로 대체해 오알림이 발송된다</b>
               <em>API가 죽으면 체감온도 결측 → 0 → "매우나쁨 · 동상 위험"이 한여름에 발송된다. 반대로 미세먼지 결측 → 0 → "좋음 · 외출 자유"라는 거짓 안전 신호가 나간다.</em>
             </div>
             <span class="where">consumer/consumer.py:76<br>consumer/rules.py:225</span>
           </div>
-          <div class="row s0">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/34">#34</a></span>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/34">#34</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/59">PR #59</a>
             <div class="what">
               <b>발송이 실패해도 쿨다운 시그니처가 전진한다</b>
               <em>SMTP·카카오·Slack이 전부 실패해도 "발송됨" 상태가 저장된다. 등급이 유지되는 동안 알림은 영영 오지 않고, 콘솔 채널이 항상 성공이라 지표로도 잡히지 않는다.</em>
             </div>
             <span class="where">consumer/alert.py:708,812<br>consumer/consumer.py:318</span>
           </div>
-          <div class="row s0">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/35">#35</a></span>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/35">#35</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/60">PR #60</a>
             <div class="what">
               <b>수집·발행이 실패해도 DAG가 성공으로 끝난다</b>
               <em>수집 실패는 예외 없이 반환되고, 발행 0건도 success다. <span class="num">email_on_failure</span>는 False이고 실패 콜백도 없어 통보 경로가 아예 없다. <span class="num">retries: 2</span>는 발동할 일이 없다.</em>
             </div>
             <span class="where">dags/air_pipeline.py:150,213,228</span>
           </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/38">#38</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/61">PR #61</a>
+            <div class="what">
+              <b>API 키·토큰이 로그에 영구 기록된다</b>
+              <em>서비스 키가 쿼리스트링이라 연결 예외 문자열에 그대로 실려 나가고, 그 문자열이 로그로 출력된다. Airflow 로그 볼륨에는 만료 정책이 없다.</em>
+            </div>
+            <span class="where">producer/producer.py:510-516<br>scripts/kakao_get_refresh_token.py:126</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/50">#50</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/62">PR #62</a>
+            <div class="what"><b>카카오 신규 refresh token을 버린다</b>
+            <em>갱신 응답의 새 토큰을 로그만 남기고 폐기해, 기존 토큰 만료 시점에 카카오 알림이 영구 중단된다.</em></div>
+            <span class="where">consumer/alert.py:655-656</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="band">
+        <header>
+          <span class="chip g0">매우나쁨 · P0</span>
+          <h3>사용자에게 틀린 정보가 나가거나, 알림이 영구히 사라진다</h3>
+          <span class="count num">2건 남음</span>
+        </header>
+        <div class="rows">
           <div class="row s0">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/36">#36</a></span>
             <div class="what">
@@ -332,14 +364,6 @@ footer{
             </div>
             <span class="where">consumer/consumer.py:63<br>docker-compose.yaml:270,281</span>
           </div>
-          <div class="row s0">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/38">#38</a></span>
-            <div class="what">
-              <b>API 키·토큰이 로그에 영구 기록된다</b>
-              <em>서비스 키가 쿼리스트링이라 연결 예외 문자열에 그대로 실려 나가고, 그 문자열이 로그로 출력된다. Airflow 로그 볼륨에는 만료 정책이 없다.</em>
-            </div>
-            <span class="where">producer/producer.py:510-516<br>scripts/kakao_get_refresh_token.py:126</span>
-          </div>
         </div>
       </div>
 
@@ -347,7 +371,7 @@ footer{
         <header>
           <span class="chip g1">나쁨 · P1</span>
           <h3>데이터가 조용히 틀어지거나, 장애를 인지할 수 없다</h3>
-          <span class="count num">10건</span>
+          <span class="count num">9건 남음</span>
         </header>
         <div class="rows">
           <div class="row s1">
@@ -403,12 +427,6 @@ footer{
             <div class="what"><b>측정값이 없다</b>
             <em>알림이 실제로 전달됐는지, 결측이 몇 건인지, 지연이 얼마인지 볼 방법이 없다. 로그는 전부 평문 f-string이다.</em></div>
             <span class="where">전역</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/50">#50</a></span>
-            <div class="what"><b>카카오 신규 refresh token을 버린다</b>
-            <em>갱신 응답의 새 토큰을 로그만 남기고 폐기해, 기존 토큰 만료 시점에 카카오 알림이 영구 중단된다.</em></div>
-            <span class="where">consumer/alert.py:655-656</span>
           </div>
         </div>
       </div>
@@ -504,16 +522,16 @@ footer{
     <div class="scroll">
       <table>
         <thead>
-          <tr><th>영역</th><th>매우나쁨</th><th>나쁨</th><th>보통</th><th>합계</th><th>한 줄 진단</th></tr>
+          <tr><th>영역</th><th>해결</th><th>매우나쁨</th><th>나쁨</th><th>보통</th><th>남음</th><th>한 줄 진단</th></tr>
         </thead>
         <tbody>
-          <tr><td>데이터 품질</td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td class="n zero">0</td><td class="n"><b>4</b></td><td>결측과 0을 구분하지 않는다. 모른다를 괜찮다로 바꾼다.</td></tr>
-          <tr><td>전달 보증</td><td class="n"><b>2</b></td><td class="n"><b>3</b></td><td class="n"><b>1</b></td><td class="n"><b>6</b></td><td>실패해도 성공으로 기록되고, 그래서 재시도가 없다.</td></tr>
-          <tr><td>상태 영속성</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n zero">0</td><td class="n"><b>3</b></td><td>재생성 한 번에 토픽·오프셋·DAG 상태가 사라진다.</td></tr>
-          <tr><td>보안</td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>키가 로그로 새고, 개발용 설정이 그대로 노출돼 있다.</td></tr>
-          <tr><td>관측성</td><td class="n zero">0</td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>2</b></td><td>측정값이 없어 무엇이 고장인지 말할 수 없다.</td></tr>
-          <tr><td>구조 · 재현성</td><td class="n zero">0</td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td class="n"><b>4</b></td><td>선언된 의존성과 실제 실행 환경이 다르다.</td></tr>
-          <tr><td>문서 · 서사</td><td class="n zero">0</td><td class="n zero">0</td><td class="n"><b>5</b></td><td class="n"><b>5</b></td><td>결정의 근거와 실행의 증거가 모두 없다.</td></tr>
+          <tr><td>데이터 품질</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n">0</td><td class="n"><b>2</b></td><td>결측과 0을 구분하게 됐다. 남은 것은 죽은 지표와 계약 테스트.</td></tr>
+          <tr><td>전달 보증</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>실패가 성공으로 기록되던 경로를 끊었다. 오프셋·DLQ가 남았다.</td></tr>
+          <tr><td>상태 영속성</td><td class="n zero">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n">0</td><td class="n"><b>3</b></td><td>재생성 한 번에 토픽·오프셋·DAG 상태가 사라진다. Docker 검증 필요.</td></tr>
+          <tr><td>보안</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>2</b></td><td>키가 로그·페이로드로 새던 경로를 막았다. 운영 프로필이 남았다.</td></tr>
+          <tr><td>관측성</td><td class="n zero">0</td><td class="n">0</td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>2</b></td><td>측정값이 없어 무엇이 고장인지 말할 수 없다.</td></tr>
+          <tr><td>구조 · 재현성</td><td class="n zero">0</td><td class="n">0</td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td class="n"><b>4</b></td><td>선언된 의존성과 실제 실행 환경이 다르다.</td></tr>
+          <tr><td>문서 · 서사</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>4</b></td><td class="n"><b>4</b></td><td>결정의 근거와 실행의 증거를 남기는 일이 남았다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -528,14 +546,15 @@ footer{
 
       <div class="step">
         <span class="dot"></span>
-        <h3>거짓말을 멈춘다</h3>
+        <h3>거짓말을 멈춘다 <span class="chip g3" style="vertical-align:middle">완료</span></h3>
         <div class="body">
           <p>사용자에게 틀린 정보가 나가는 경로와, 실패가 성공으로 보고되는 경로를 먼저 끊습니다. 이게 안 되면 나머지 개선은 잘못된 신호 위에 쌓입니다.</p>
           <ul>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/33">#33</a> 결측값 0 대체 제거 — <span class="num">UNKNOWN</span> 등급 도입, 판정·시그니처·발송에서 제외</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/34">#34</a> 외부 채널 전량 실패 시 시그니처 전진 금지 + 재시도</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/35">#35</a> 수집·발행 실패를 실제 태스크 실패로 올리고 통보</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/38">#38</a> 로그 시크릿 마스킹</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/33">#33</a> 결측값 0 대체 제거 — <span class="num">UNKNOWN</span> 등급 도입</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/34">#34</a> 외부 채널 전량 실패 시 시그니처 전진 금지</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/35">#35</a> 수집·발행 실패를 실제 태스크 실패로 올리고 통보</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/38">#38</a> 시크릿 마스킹 — 로그와 페이로드 양쪽</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/50">#50</a> 카카오 토큰 회전 저장 (알림 영구 중단 차단)</li>
           </ul>
         </div>
       </div>
@@ -638,12 +657,13 @@ footer{
     </div>
     <div class="tally">
       <div class="card"><p class="who">등록 이슈</p><b class="num">36</b><p class="note">누적</p></div>
-      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">7</b><p class="note">#1 #9 #11 #13 #15 #18 #30</p></div>
-      <div class="card"><p class="who">진행 중</p><b class="num" style="color:var(--g-normal)">1</b><p class="note">#32 메달리언 제거</p></div>
-      <div class="card"><p class="who">대기</p><b class="num">28</b><p class="note">P0 6 · P1 10 · P2 7 · 문서 5</p></div>
+      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">14</b><p class="note">이번 회차 7건 포함</p></div>
+      <div class="card"><p class="who">머지된 PR</p><b class="num" style="color:var(--g-good)">8</b><p class="note">#31 #56 #57 #58 #59 #60 #61 #62</p></div>
+      <div class="card"><p class="who">남음</p><b class="num">22</b><p class="note">P0 2 · P1 9 · P2 7 · 문서 4</p></div>
     </div>
     <div class="callout">
-      <p><b>가장 싸고 가장 티 나는 한 가지.</b> 기능을 더하는 것이 아니라 <span class="num">default=0</span> 한 줄을 고치는 것입니다. 결측을 0으로 바꾸는 코드가 이 저장소에서 유일하게 사용자에게 실제 피해를 주는 결함이고, 고친 뒤에는 "결측과 0을 구분하지 않은 버그를 직접 찾아 고쳤다"는 서사로 뒤집힙니다.</p>
+      <p><b>이번 회차에 끝낸 것.</b> 사용자에게 틀린 정보가 나가는 경로(결측 0 치환)와 실패가 성공으로 기록되던 경로(쿨다운 전진·DAG 성공 반환), 그리고 키가 로그·페이로드로 새던 경로를 막았습니다. 회귀 테스트는 18개에서 <span class="num">68개</span>로 늘었습니다.</p>
+      <p><b>다음 두 건은 Docker가 필요합니다.</b> Kafka 영속 볼륨(<a href="https://github.com/hyeongyu-data/air-quality-project/issues/36">#36</a>)과 OpenSearch 재연결·인덱스 템플릿(<a href="https://github.com/hyeongyu-data/air-quality-project/issues/37">#37</a>)은 볼륨 권한과 기동 순서를 실제로 띄워 확인해야 합니다. 검증하지 않은 인프라 변경은 머지하지 않았습니다.</p>
     </div>
   </section>
 

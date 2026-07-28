@@ -2,6 +2,8 @@
 
 이 시스템을 실제로 운영한다고 가정했을 때 발생 가능한 장애를 코드 근거와 함께 정리한 문서입니다. 각 항목은 해당 GitHub 이슈로 연결됩니다.
 
+> **진행 상황 (2026-07-29 갱신)** — 아래 항목 중 1절(데이터 품질), 2.1·2.2(전달 보증), 2.4(카카오 토큰), 4.1(시크릿 로그)은 해결해 머지했습니다. 각 절 머리에 상태를 표기했습니다. 3절(상태 영속성)과 3.3(OpenSearch)은 Docker로 실제 기동을 확인해야 하는 인프라 변경이라 검증 전까지 반영하지 않았습니다.
+
 ## 요약
 
 해피 패스는 완성돼 있습니다. 문제는 **실패를 실패로 인지하는 경로가 대부분 끊겨 있다**는 것입니다.
@@ -18,7 +20,7 @@
 
 ## 1. 데이터 품질 — 결측이 정상값으로 둔갑한다
 
-### 1.1 결측을 0으로 치환 ([#33](https://github.com/hyeongyu-data/air-quality-project/issues/33))
+### 1.1 결측을 0으로 치환 — **해결됨 (PR #58)** ([#33](https://github.com/hyeongyu-data/air-quality-project/issues/33))
 
 `consumer/consumer.py:76-82`의 `_safe_float(value, default: float = 0)`가 9개 지표 전부에 적용된다.
 
@@ -31,7 +33,7 @@
 
 **개선**: `AlertLevel.UNKNOWN` 도입, 결측 지표를 판정·시그니처·발송에서 제외. 핵심 지표 전량 결측이면 사용자 알림 대신 운영 경보로 전환.
 
-### 1.2 응답 스키마·발표시각 변경 시 조용한 전면 결측 ([#35](https://github.com/hyeongyu-data/air-quality-project/issues/35))
+### 1.2 응답 스키마·발표시각 변경 시 조용한 전면 결측 — **부분 해결 (PR #60)** ([#35](https://github.com/hyeongyu-data/air-quality-project/issues/35))
 
 `_is_success_response`가 False면 빈 리스트를 반환하고(`producer/producer.py:144-149, 540-546`) 상위가 `or {}`로 흡수한다(`:1093-1096`). 결과는 1.1과 동일한 전 항목 0이며, Airflow 태스크는 성공으로 끝난다.
 
@@ -45,7 +47,7 @@
 
 ## 2. 전달 보증 — 실패가 성공으로 기록된다
 
-### 2.1 발송 실패인데 쿨다운은 전진 ([#34](https://github.com/hyeongyu-data/air-quality-project/issues/34)) — 가장 치명적
+### 2.1 발송 실패인데 쿨다운은 전진 — **해결됨 (PR #59)** ([#34](https://github.com/hyeongyu-data/air-quality-project/issues/34)) — 가장 치명적
 
 ```
 send_all()          → 채널별 실패를 dict에 담기만 함        (alert.py:812-818)
@@ -59,7 +61,7 @@ SMTP 앱 비밀번호 만료(535), 카카오 refresh token 만료, Slack webhook
 
 **개선**: "발송됨"의 정의를 **외부 채널 최소 1개 성공**으로 바꾸고, 실패 시 시그니처를 전진시키지 않는다. `delivered_channels`를 함께 저장해 채널별로 판정한다.
 
-### 2.2 DAG가 실패를 성공으로 보고 ([#35](https://github.com/hyeongyu-data/air-quality-project/issues/35))
+### 2.2 DAG가 실패를 성공으로 보고 — **해결됨 (PR #60)** ([#35](https://github.com/hyeongyu-data/air-quality-project/issues/35))
 
 - `dags/air_pipeline.py:150-156` — 수집 실패 시 예외 없이 반환. 태스크는 성공.
 - `:228-239` — XCom이 비어도 `{"status": "success"}`.
@@ -72,7 +74,7 @@ SMTP 앱 비밀번호 만료(535), 카카오 refresh token 만료, Slack webhook
 
 `enable_auto_commit=True`(`consumer.py:207`)에서 오프셋은 처리 성공과 무관하게 커밋된다. 처리 중 예외는 `except`가 삼키므로(`:327-330`) **해당 메시지는 재처리되지 않는다.** 파싱 불가 메시지 1건 = 그 시간대 알림 영구 소실.
 
-### 2.4 카카오 토큰 회전 폐기 ([#50](https://github.com/hyeongyu-data/air-quality-project/issues/50))
+### 2.4 카카오 토큰 회전 폐기 — **해결됨 (PR #62)** ([#50](https://github.com/hyeongyu-data/air-quality-project/issues/50))
 
 갱신 응답의 신규 refresh token을 로그만 남기고 버린다(`alert.py:655-656`). 기존 토큰 만료 시점에 카카오 알림이 영구 중단되고, 2.1과 겹치면 복구 후에도 재발송이 일어나지 않는다.
 
@@ -104,7 +106,7 @@ healthcheck는 `curl -f /_cluster/health`라 200만 오면 통과한다. **red �
 
 ## 4. 보안
 
-### 4.1 로그로 새는 시크릿 ([#38](https://github.com/hyeongyu-data/air-quality-project/issues/38))
+### 4.1 로그로 새는 시크릿 — **해결됨 (PR #61)** ([#38](https://github.com/hyeongyu-data/air-quality-project/issues/38))
 
 서비스 키가 쿼리스트링으로 전달되고(`producer.py:124-128, 497-503, 773-782`), `requests` 연결 예외 문자열에는 **serviceKey를 포함한 전체 URL**이 들어간다. 이를 그대로 `last_error`에 담아 출력한다(`:510-516`). Airflow 태스크 로그는 볼륨에 영구 보존되고 만료 정책이 없다.
 
@@ -146,7 +148,7 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 
 | 순서 | 목표 | 이슈 |
 | --- | --- | --- |
-| 1 | 거짓말을 멈춘다 — 틀린 정보 발송과 실패의 성공 보고를 끊는다 | [#33](https://github.com/hyeongyu-data/air-quality-project/issues/33) [#34](https://github.com/hyeongyu-data/air-quality-project/issues/34) [#35](https://github.com/hyeongyu-data/air-quality-project/issues/35) [#38](https://github.com/hyeongyu-data/air-quality-project/issues/38) |
+| 1 ✔ | 거짓말을 멈춘다 — 틀린 정보 발송과 실패의 성공 보고를 끊는다 | ~~[#33](https://github.com/hyeongyu-data/air-quality-project/issues/33) [#34](https://github.com/hyeongyu-data/air-quality-project/issues/34) [#35](https://github.com/hyeongyu-data/air-quality-project/issues/35) [#38](https://github.com/hyeongyu-data/air-quality-project/issues/38) [#50](https://github.com/hyeongyu-data/air-quality-project/issues/50)~~ 완료 |
 | 2 | 상태를 잃지 않는다 — 영속성과 멱등성 | [#36](https://github.com/hyeongyu-data/air-quality-project/issues/36) [#47](https://github.com/hyeongyu-data/air-quality-project/issues/47) [#41](https://github.com/hyeongyu-data/air-quality-project/issues/41) [#37](https://github.com/hyeongyu-data/air-quality-project/issues/37) |
 | 3 | 측정할 수 있게 만든다 | [#49](https://github.com/hyeongyu-data/air-quality-project/issues/49) [#42](https://github.com/hyeongyu-data/air-quality-project/issues/42) [#40](https://github.com/hyeongyu-data/air-quality-project/issues/40) |
 | 4 | 회귀를 막는다 — 테스트 가능한 구조로 바꾼 뒤 리팩터링 | [#43](https://github.com/hyeongyu-data/air-quality-project/issues/43) [#48](https://github.com/hyeongyu-data/air-quality-project/issues/48) [#45](https://github.com/hyeongyu-data/air-quality-project/issues/45) [#46](https://github.com/hyeongyu-data/air-quality-project/issues/46) |
@@ -161,13 +163,13 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 현재 충족 여부를 함께 표기했습니다.
 
 **데이터 정합성**
-- [ ] 결측과 실제 0이 코드·저장소·알림 본문에서 구분된다
-- [ ] 필수 지표 최소 개수 계약이 있고 미달 시 파이프라인이 실패한다
+- [x] 결측과 실제 0이 코드·저장소·알림 본문에서 구분된다
+- [x] 필수 지표 최소 개수 계약이 있고 미달 시 파이프라인이 실패한다
 - [ ] 공공 API 응답 픽스처 기반 파싱 테스트가 CI에서 돈다
 - [ ] 모든 타임스탬프가 tz-aware이며 컨테이너 TZ에 의존하지 않는다
 
 **전달 보증**
-- [ ] 채널별 발송 결과가 저장·집계되고, 실패는 재시도되며 쿨다운을 전진시키지 않는다
+- [x] 채널별 발송 결과가 저장·집계되고 쿨다운을 전진시키지 않는다 (자동 재시도는 미구현 — 다음 회차에 재발송)
 - [ ] 오프셋은 처리 성공 후 커밋되고 실패 메시지는 DLQ로 간다
 - [ ] 중복 방지 키(`event_id`)가 있고 OpenSearch는 upsert다
 - [ ] 무알림이 정상인지 고장인지 하트비트로 구분된다
@@ -180,14 +182,14 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 **오케스트레이션**
 - [ ] 메타DB가 PostgreSQL이고 executor가 SequentialExecutor가 아니다
 - [ ] 이미지 의존성이 버전 고정돼 있고 런타임에 pip install 하지 않는다
-- [ ] DAG 실패가 사람에게 통보된다
+- [x] DAG 실패가 사람에게 통보된다 (Slack 실패 콜백)
 
 **보안**
 - [ ] 시크릿이 평문 환경변수가 아니라 시크릿 매니저로 주입된다
-- [ ] 로그·예외 메시지에 키·토큰이 남지 않는다(마스킹 + 스캐닝)
+- [x] 로그·예외 메시지에 키·토큰이 남지 않는다 (마스킹 완료, CI 스캐닝은 #23)
 - [ ] OpenSearch 인증/TLS, Airflow Fernet 키, Kafka UI 인증이 활성화돼 있다
 - [ ] 관리 포트가 공개 인터페이스에 바인딩되지 않는다
-- [ ] 카카오 토큰 회전 값이 자동 저장되고 만료 임박 알람이 있다
+- [x] 카카오 토큰 회전 값이 자동 저장되고 만료 임박 경고가 있다
 - [ ] 컨테이너가 non-root로 실행된다
 
 **관측성 · 운영**
