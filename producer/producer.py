@@ -578,8 +578,6 @@ class AirKoreaAPIClient:
                 "no2": 0.045,
                 "so2": 0.005,
                 "co": 0.5,
-                "pm10_grade": "보통",
-                "pm25_grade": "보통",
                 ...
             }
         """
@@ -679,15 +677,13 @@ class AirKoreaAPIClient:
             "station_name": item.get("stationName", "정보없음"),
             "pm10": AirKoreaAPIClient._safe_float(value("pm10", "pm10Value"), default=None),
             "pm25": AirKoreaAPIClient._safe_float(value("pm25", "pm25Value"), default=None),
-            "yellow_dust": AirKoreaAPIClient._safe_float(value("pm10", "pm10Value"), default=None),
-            "yellow_dust_source": "pm10_proxy",
             "o3": AirKoreaAPIClient._safe_float(value("o3", "o3Value"), default=None),
             "no2": AirKoreaAPIClient._safe_float(value("no2", "no2Value"), default=None),
             "so2": AirKoreaAPIClient._safe_float(value("so2", "so2Value"), default=None),
             "co": AirKoreaAPIClient._safe_float(value("co", "coValue"), default=None),
-            "pm10_grade": item.get("pm10Grade", "정보없음"),
-            "pm25_grade": item.get("pm25Grade", "정보없음"),
-            "o3_grade": item.get("o3Grade", "정보없음"),
+            # 등급 필드는 내보내지 않는다. 대표 레코드의 수치는 전 측정소 평균인데
+            # 등급만 첫 측정소 것이 남아 같은 문서 안에서 서로 다른 대상을 가리켰다.
+            # 하류는 consumer/rules.py가 수치로 직접 판정하므로 필요도 없다.
             "data_time": item.get("dataTime"),
         }
 
@@ -715,8 +711,6 @@ class AirKoreaAPIClient:
             "station_count": len(parsed_items),
             "pm10": mean_field("pm10"),
             "pm25": mean_field("pm25"),
-            "yellow_dust": mean_field("pm10"),
-            "yellow_dust_source": "pm10_proxy",
             "o3": mean_field("o3"),
             "no2": mean_field("no2"),
             "so2": mean_field("so2"),
@@ -1146,11 +1140,12 @@ class WeatherDataCollector:
         if not uv_data:
             data_warnings["uv_index"] = uv_error or "자외선지수 데이터 없음"
         
+        # 황사는 발생정보 API 결과만 쓴다. 예전에는 권한이 없을 때 PM10 평균을
+        # 그대로 복사했는데, 황사 판정의 "좋음" 임계가 150이라 서울 PM10 평균으로는
+        # 사실상 항상 좋음이 나왔다. 감시되는 것처럼 보이지만 실제로는 죽은 지표였다.
+        # 권한이 없으면 결측(None)으로 두고 컨슈머가 "정보없음"으로 표시한다.
         yellow_dust = yellow_dust_data.get("yellow_dust")
         yellow_dust_source = yellow_dust_data.get("yellow_dust_source")
-        if yellow_dust_data.get("yellow_dust_advisory") != "발생" and air_data.get("yellow_dust") is not None:
-            yellow_dust = air_data.get("yellow_dust")
-            yellow_dust_source = air_data.get("yellow_dust_source")
         
         return {
             "timestamp": now_kst().isoformat(),
@@ -1240,11 +1235,12 @@ class WeatherDataCollector:
         if not today_forecast:
             data_warnings["today_forecast"] = self.forecast_api.last_error or "오늘 단기예보 요약 데이터 없음"
         
+        # 황사는 발생정보 API 결과만 쓴다. 예전에는 권한이 없을 때 PM10 평균을
+        # 그대로 복사했는데, 황사 판정의 "좋음" 임계가 150이라 서울 PM10 평균으로는
+        # 사실상 항상 좋음이 나왔다. 감시되는 것처럼 보이지만 실제로는 죽은 지표였다.
+        # 권한이 없으면 결측(None)으로 두고 컨슈머가 "정보없음"으로 표시한다.
         yellow_dust = yellow_dust_data.get("yellow_dust")
         yellow_dust_source = yellow_dust_data.get("yellow_dust_source")
-        if yellow_dust_data.get("yellow_dust_advisory") != "발생" and air_data.get("yellow_dust") is not None:
-            yellow_dust = air_data.get("yellow_dust")
-            yellow_dust_source = air_data.get("yellow_dust_source")
         
         return {
             "timestamp": now_kst().isoformat(),
