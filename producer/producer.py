@@ -32,6 +32,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
+    from .timeutil import now_kst, to_kst
+except ImportError:  # 직접 실행 시
+    from timeutil import now_kst, to_kst
+
+
+try:
     from .masking import mask_secrets, install_secret_filter
 except ImportError:  # 직접 실행 시
     from masking import mask_secrets, install_secret_filter
@@ -133,7 +139,7 @@ class WeatherAPIClient:
             "numOfRows": 10,
             "dataType": "JSON",
             "areaNo": area_no,
-            "time": time or datetime.now().strftime("%Y%m%d%H"),
+            "time": time or now_kst().strftime("%Y%m%d%H"),
         }
         if extra_params:
             params.update(extra_params)
@@ -160,7 +166,7 @@ class WeatherAPIClient:
     def _latest_index_time(hours: List[int] = None, delay_minutes: int = 30) -> str:
         """생활/보건기상지수 발표시각 생성"""
         hours = hours or [6, 18]
-        now = datetime.now()
+        now = now_kst()
         candidate = now.replace(minute=0, second=0, microsecond=0)
         while True:
             if candidate.hour in hours and now >= candidate + timedelta(minutes=delay_minutes):
@@ -194,7 +200,7 @@ class WeatherAPIClient:
         )
         
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": region,
             "area_no": item.get("areaNo"),
             "base_time": item.get("date"),
@@ -303,7 +309,7 @@ class WeatherAPIClient:
     def _parse_health_index(self, region_code: str) -> Dict:
         """보건기상지수 파싱"""
         result = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": "서울",
             "area_no": region_code,
             "data_type": "health_index",
@@ -336,11 +342,11 @@ class WeatherAPIClient:
         latest_uv = self._select_latest_hourly_value(
             items[0],
             base_time=record["base_time"],
-            now=datetime.now()
+            now=now_kst()
         )
         uv_index = latest_uv.get("value") if latest_uv else record["value"]
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": "서울",
             "area_no": record["area_no"],
             "base_time": record["base_time"],
@@ -365,7 +371,9 @@ class WeatherAPIClient:
         if not base_time:
             return None
         try:
-            base_dt = datetime.strptime(base_time, "%Y%m%d%H")
+            # 기상청 발표시각은 KST다. aware로 만들지 않으면 아래에서 aware인
+            # now와 비교할 때 TypeError가 난다.
+            base_dt = to_kst(datetime.strptime(base_time, "%Y%m%d%H"))
         except ValueError:
             return None
         
@@ -408,7 +416,7 @@ class WeatherAPIClient:
         
         record = self._build_forecast_record(items[0], "서울")
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": "서울",
             "area_no": record["area_no"],
             "base_time": record["base_time"],
@@ -603,7 +611,7 @@ class AirKoreaAPIClient:
     def get_yellow_dust_advisory(self, region: str = "서울") -> Dict:
         """황사 발생정보 문서 기준 현재 연도 황사 발생 지역 조회"""
         try:
-            year = datetime.now().strftime("%Y")
+            year = now_kst().strftime("%Y")
             items = self._request_items(
                 self.YELLOW_DUST_URL,
                 {"year": year},
@@ -628,7 +636,7 @@ class AirKoreaAPIClient:
             if matched:
                 latest = matched[0]
                 latest_time = latest.get("dataTime") or ""
-                is_today = latest_time[:8] == datetime.now().strftime("%Y%m%d")
+                is_today = latest_time[:8] == now_kst().strftime("%Y%m%d")
                 if is_today:
                     return {
                         "yellow_dust_advisory": "발생",
@@ -666,7 +674,7 @@ class AirKoreaAPIClient:
             return None
         
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": region,
             "station_name": item.get("stationName", "정보없음"),
             "pm10": AirKoreaAPIClient._safe_float(value("pm10", "pm10Value"), default=None),
@@ -763,7 +771,7 @@ class KMAForecastAPIClient:
     
     @staticmethod
     def _latest_base_datetime(hours: List[int], delay_minutes: int) -> datetime:
-        now = datetime.now()
+        now = now_kst()
         candidate = now.replace(minute=0, second=0, microsecond=0)
         while True:
             if candidate.hour in hours and now >= candidate + timedelta(minutes=delay_minutes):
@@ -812,7 +820,7 @@ class KMAForecastAPIClient:
             if not pop_items:
                 return None
             
-            now_key = datetime.now().strftime("%Y%m%d%H%M")
+            now_key = now_kst().strftime("%Y%m%d%H%M")
             
             def fcst_key(item: Dict) -> str:
                 return f"{item.get('fcstDate', '')}{item.get('fcstTime', '')}"
@@ -844,7 +852,7 @@ class KMAForecastAPIClient:
             if not items:
                 return {}
             
-            now = datetime.now()
+            now = now_kst()
             today = now.strftime("%Y%m%d")
             now_key = now.strftime("%Y%m%d%H%M")
             
@@ -1145,7 +1153,7 @@ class WeatherDataCollector:
             yellow_dust_source = air_data.get("yellow_dust_source")
         
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": region,
             "data_type": "current_weather",
             "area_no": grid["area_no"],
@@ -1239,12 +1247,12 @@ class WeatherDataCollector:
             yellow_dust_source = air_data.get("yellow_dust_source")
         
         return {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": region,
             "data_type": "current_weather",
             "forecast_type": forecast_type,
             "forecast_period": today_forecast.get("forecast_period", "today_remaining"),
-            "forecast_date": today_forecast.get("forecast_date", datetime.now().strftime("%Y%m%d")),
+            "forecast_date": today_forecast.get("forecast_date", now_kst().strftime("%Y%m%d")),
             "area_no": grid["area_no"],
             "nx": grid["nx"],
             "ny": grid["ny"],
@@ -1293,7 +1301,7 @@ class WeatherDataCollector:
         current_data.update({
             "forecast_type": "morning_mixed",
             "forecast_period": "today_full_with_current_conditions",
-            "forecast_date": today_forecast.get("forecast_date", datetime.now().strftime("%Y%m%d")),
+            "forecast_date": today_forecast.get("forecast_date", now_kst().strftime("%Y%m%d")),
             "min_temperature": temperature_summary.get("min_temperature"),
             "max_temperature": temperature_summary.get("max_temperature"),
             "precipitation_probability": today_forecast.get("precipitation_probability"),
@@ -1313,7 +1321,7 @@ class WeatherDataCollector:
     
     def collect_scheduled_weather(self, region: str = "서울", run_hour: Optional[int] = None) -> Dict:
         """매시간 스케줄의 실행 시각에 맞는 알림 데이터 생성"""
-        hour = datetime.now().hour if run_hour is None else run_hour
+        hour = now_kst().hour if run_hour is None else run_hour
         if hour == 0:
             return self.collect_daily_weather_forecast(
                 region=region,
@@ -1407,7 +1415,7 @@ if __name__ == "__main__":
 
     # 샘플 현재 기상 통합 데이터
     sample_weather = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now_kst().isoformat(),
         "region": "서울",
         "data_type": "current_weather",
         "pm10": 45,
