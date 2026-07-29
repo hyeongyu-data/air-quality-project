@@ -735,6 +735,9 @@ class KakaoAlertSender:
 class OpenSearchAlertSender:
     """OpenSearch에 알림 데이터를 저장하는 클래스"""
     
+    # OpenSearch가 죽어 있을 때도 쿨다운이 동작하도록 마지막 시그니처를 남긴다.
+    DEFAULT_STATE_PATH = ".signature_state.json"
+
     def __init__(self, opensearch_client=None):
         """
         OpenSearch 클라이언트 초기화
@@ -745,6 +748,40 @@ class OpenSearchAlertSender:
         self.client = opensearch_client
         self.index_prefix = os.getenv("OPENSEARCH_INDEX_PREFIX", "weather-alert")
         self.enabled = True if opensearch_client else False
+        self.state_path = Path(
+            os.getenv("SIGNATURE_STATE_PATH", self.DEFAULT_STATE_PATH)
+        )
+
+    def attach(self, client) -> None:
+        """재연결로 새로 얻은 클라이언트를 반영한다."""
+        if client is not None and client is not self.client:
+            logger.info("OpenSearch 클라이언트 재연결 반영")
+        self.client = client
+        self.enabled = client is not None
+
+    def _read_cache(self) -> Dict[str, str]:
+        try:
+            if self.state_path.exists():
+                return json.loads(self.state_path.read_text(encoding="utf-8"))
+        except Exception as e:
+            logger.warning(f"시그니처 캐시 읽기 실패: {str(e)}")
+        return {}
+
+    def _write_cache(self, region: str, signature: str) -> None:
+        """마지막으로 알린 등급을 로컬에 남긴다.
+
+        OpenSearch 미가용 시 조회가 항상 None을 돌려주면 쿨다운이 무력화돼
+        매 메시지가 전 채널로 나간다. 캐시가 있으면 그 사이에도 중복을 막는다.
+        """
+        try:
+            cache = self._read_cache()
+            cache[region] = signature
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            self.state_path.write_text(
+                json.dumps(cache, ensure_ascii=False), encoding="utf-8"
+            )
+        except Exception as e:
+            logger.warning(f"시그니처 캐시 저장 실패: {str(e)}")
     
     def send(self, alert_data: Dict, record_signature: bool = True) -> bool:
         """
@@ -766,8 +803,11 @@ class OpenSearchAlertSender:
         try:
             timestamp = alert_data.get("timestamp", now_kst().isoformat())
             
-            # 인덱스 이름: weather-alert-2026.04.28
-            date_str = datetime.fromisoformat(timestamp).strftime("%Y.%m.%d")
+            # 인덱스 이름: weather-alert-2026.04 (월 단위)
+            # 일 단위면 1년에 365개 인덱스가 쌓인다. 시간당 1건 발행하는
+            # 워크로드에서 감당할 이유가 없는 샤드 수다. 조회는 와일드카드라
+            # 단위가 바뀌어도 그대로 동작한다.
+            date_str = datetime.fromisoformat(timestamp).strftime("%Y.%m")
             index_name = f"{self.index_prefix}-{date_str}"
             
             # 문서 생성
@@ -795,6 +835,11 @@ class OpenSearchAlertSender:
                 id=alert_data.get("event_id") or None,
             )
             
+            if record_signature:
+                self._write_cache(
+                    alert_data.get("region", "전국"),
+                    alert_data.get("grade_signature", ""),
+                )
             logger.info(f"OpenSearch 저장 성공: {index_name} (ID: {response['_id']})")
             return True
             
@@ -810,13 +855,18 @@ class OpenSearchAlertSender:
         반환해 호출측이 발송하도록(fail-open) 둔다 — 알림 유실을 막는다.
         """
         if not self.enabled or not self.client:
-            return None
+            cached = self._read_cache().get(region)
+            if cached is not None:
+                logger.info("OpenSearch 미연결 → 로컬 캐시의 직전 시그니처 사용")
+            return cached
         try:
             response = self.client.search(
                 index=f"{self.index_prefix}-*",
                 body={
                     "size": 1,
-                    "query": {"match": {"region": region}},
+                    # region은 인덱스 템플릿에서 keyword다. match는 분석기를 타서
+                    # 지역명이 늘어나면 오매칭한다.
+                    "query": {"term": {"region": region}},
                     "sort": [{"timestamp": {"order": "desc"}}],
                     "_source": ["grade_signature"],
                 },
@@ -826,8 +876,8 @@ class OpenSearchAlertSender:
                 return hits[0].get("_source", {}).get("grade_signature")
             return None
         except Exception as e:
-            logger.warning(f"직전 시그니처 조회 실패(fail-open, 발송 진행): {str(e)}")
-            return None
+            logger.warning(f"직전 시그니처 조회 실패 → 로컬 캐시 확인: {str(e)}")
+            return self._read_cache().get(region)
 
     @staticmethod
     def _calculate_severity(alert_data: Dict) -> str:

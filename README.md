@@ -208,6 +208,22 @@ Consumer는 등급이 직전과 바뀔 때만 외부 채널(Slack/이메일/카�
 | 강수확률 | 00시/06시는 오늘 최대값, 12시/18시는 현재 가까운 예보 |
 | 자외선지수 | 기상청 UV API의 시간별 `h*` 값 중 현재 시각 이하의 가장 최근 값 |
 
+## OpenSearch 구성
+
+컨슈머가 연결에 성공하면 인덱스 템플릿과 보존 정책을 적용합니다(`consumer/opensearch_setup.py`). `PUT`은 멱등하므로 매 기동마다 호출해도 안전하고, 별도 관리 스크립트를 두지 않아 "적용을 잊는" 경로가 없습니다.
+
+| 항목 | 값 | 이유 |
+| --- | --- | --- |
+| 인덱스 단위 | 월 (`weather-alert-2026.07`) | 일 단위면 1년에 365개 인덱스가 쌓입니다. 조회는 와일드카드라 그대로 동작합니다 |
+| `number_of_replicas` | 0 | 단일 노드에서 replica 1은 영구 미할당이라 클러스터가 상시 yellow가 됩니다 |
+| `region`·`event_id`·`grade_signature` | `keyword` | `text`면 분석기를 타서 정확 일치 조회가 오매칭합니다 |
+| `indices.*` 수치 | `float` | 동적 매핑이면 첫 문서가 정수일 때 `long`이 잡혀 45.6이 45로 절삭됩니다 |
+| 보존 | 90일 (ISM) | 월 단위 인덱스라 30일로 두면 사용 중인 이번 달 인덱스를 지웁니다 |
+
+healthcheck는 `wait_for_status=yellow`를 씁니다. 상태를 확인하지 않으면 red 클러스터도 200을 돌려줘 healthy로 통과합니다. 데이터 인덱스는 green이며, 남는 yellow는 ISM 플러그인의 시스템 인덱스(`.opendistro-ism-config`) replica로 단일 노드에서는 정상입니다.
+
+OpenSearch가 죽어 있어도 쿨다운은 유지됩니다. 마지막으로 알린 등급을 `SIGNATURE_STATE_PATH`(기본 `.signature_state.json`)에 남기고, 조회가 실패하면 이 캐시를 씁니다. 캐시가 없으면 이전처럼 발송하는 쪽(fail-open)으로 동작합니다.
+
 ## 데이터 영속성
 
 Kafka 토픽 로그·KRaft 메타데이터·컨슈머 오프셋은 명명 볼륨 `kafka_data`에 저장됩니다. 이미지 기본값은 컨테이너 쓰기 레이어(`/tmp/kafka-logs`)라 컨테이너를 재생성하면 토픽과 오프셋이 사라집니다.
