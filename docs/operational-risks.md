@@ -2,7 +2,7 @@
 
 이 시스템을 실제로 운영한다고 가정했을 때 발생 가능한 장애를 코드 근거와 함께 정리한 문서입니다. 각 항목은 해당 GitHub 이슈로 연결됩니다.
 
-> **진행 상황 (2026-07-29 갱신)** — 아래 항목 중 1절(데이터 품질), 2.1·2.2(전달 보증), 2.4(카카오 토큰), 4.1(시크릿 로그)은 해결해 머지했습니다. 각 절 머리에 상태를 표기했습니다. 3절(상태 영속성)과 3.3(OpenSearch)은 Docker로 실제 기동을 확인해야 하는 인프라 변경이라 검증 전까지 반영하지 않았습니다.
+> **진행 상황 (2026-07-29 갱신)** — 1절(데이터 품질) 전체, 2.1·2.2·2.4(전달 보증), 4.1(시크릿 로그), 5절(시간대)을 해결해 머지했고 멱등성도 확보했습니다. 각 절 머리에 상태와 PR 번호를 표기했습니다. 3절(상태 영속성)은 Docker로 실제 기동을 확인해야 하는 인프라 변경이라 검증 전까지 반영하지 않았습니다.
 
 ## 요약
 
@@ -39,7 +39,7 @@
 
 **개선**: 수집 단계에 **필수 지수 최소 개수 계약**을 두고 미달 시 `AirflowException`. 고정 픽스처 기반 파싱 계약 테스트를 CI에 추가([#43](https://github.com/hyeongyu-data/air-quality-project/issues/43)).
 
-### 1.3 죽은 지표 ([#44](https://github.com/hyeongyu-data/air-quality-project/issues/44))
+### 1.3 죽은 지표 — **해결됨 (PR #66)** ([#44](https://github.com/hyeongyu-data/air-quality-project/issues/44))
 
 황사 권한이 없으면 PM10 평균을 그대로 복사하는데(`producer/producer.py:666-667`), 황사 GOOD 임계가 150(`rules.py:141`)이라 서울 PM10 평균으로는 사실상 항상 "좋음"이다. 또한 `pm10` 수치는 전 측정소 평균인데 `pm10_grade`는 첫 측정소 등급을 그대로 쓴다(`:696-708`).
 
@@ -104,6 +104,12 @@ healthcheck는 `curl -f /_cluster/health`라 200만 오면 통과한다. **red �
 
 ---
 
+## 3.4 멱등성 — **해결됨 (PR #64)** ([#41](https://github.com/hyeongyu-data/air-quality-project/issues/41))
+
+발행·색인 어디에도 중복 방지 키가 없어 DAG 재시도가 곧 중복 발행이었고, OpenSearch는 `_id` 자동 생성이라 재처리할 때마다 문서가 쌓였습니다.
+
+**예정된 실행 시각** 기준의 결정적 키 `event_id`(`지역:YYYYMMDDHH`, KST)를 도입했습니다. 벽시계로 만들면 재시도마다 값이 갈려 목적을 잃습니다. Kafka는 `enable_idempotence=True`, OpenSearch는 `_id = event_id`로 upsert 합니다.
+
 ## 4. 보안
 
 ### 4.1 로그로 새는 시크릿 — **해결됨 (PR #61)** ([#38](https://github.com/hyeongyu-data/air-quality-project/issues/38))
@@ -118,7 +124,7 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 
 ---
 
-## 5. 시간대 ([#39](https://github.com/hyeongyu-data/air-quality-project/issues/39))
+## 5. 시간대 — **해결됨 (PR #65)** ([#39](https://github.com/hyeongyu-data/air-quality-project/issues/39))
 
 전 구간이 naive `datetime.now()`다. OpenSearch는 오프셋 없는 ISO를 UTC로 해석하므로 이력이 9시간 밀린다. 컨슈머 컨테이너에는 `TZ`가 없어(Airflow만 `Asia/Seoul`) 같은 스택 안에서 두 프로세스의 "지금"이 다르고, KST 00~09시 구간에서 일별 인덱스 날짜가 전날로 갈라진다.
 
@@ -149,7 +155,7 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 | 순서 | 목표 | 이슈 |
 | --- | --- | --- |
 | 1 ✔ | 거짓말을 멈춘다 — 틀린 정보 발송과 실패의 성공 보고를 끊는다 | ~~[#33](https://github.com/hyeongyu-data/air-quality-project/issues/33) [#34](https://github.com/hyeongyu-data/air-quality-project/issues/34) [#35](https://github.com/hyeongyu-data/air-quality-project/issues/35) [#38](https://github.com/hyeongyu-data/air-quality-project/issues/38) [#50](https://github.com/hyeongyu-data/air-quality-project/issues/50)~~ 완료 |
-| 2 | 상태를 잃지 않는다 — 영속성과 멱등성 | [#36](https://github.com/hyeongyu-data/air-quality-project/issues/36) [#47](https://github.com/hyeongyu-data/air-quality-project/issues/47) [#41](https://github.com/hyeongyu-data/air-quality-project/issues/41) [#37](https://github.com/hyeongyu-data/air-quality-project/issues/37) |
+| 2 | 상태를 잃지 않는다 — 영속성과 멱등성 | ~~[#41](https://github.com/hyeongyu-data/air-quality-project/issues/41)~~ 완료 · [#36](https://github.com/hyeongyu-data/air-quality-project/issues/36) [#37](https://github.com/hyeongyu-data/air-quality-project/issues/37) [#47](https://github.com/hyeongyu-data/air-quality-project/issues/47) — Docker 검증 필요 |
 | 3 | 측정할 수 있게 만든다 | [#49](https://github.com/hyeongyu-data/air-quality-project/issues/49) [#42](https://github.com/hyeongyu-data/air-quality-project/issues/42) [#40](https://github.com/hyeongyu-data/air-quality-project/issues/40) |
 | 4 | 회귀를 막는다 — 테스트 가능한 구조로 바꾼 뒤 리팩터링 | [#43](https://github.com/hyeongyu-data/air-quality-project/issues/43) [#48](https://github.com/hyeongyu-data/air-quality-project/issues/48) [#45](https://github.com/hyeongyu-data/air-quality-project/issues/45) [#46](https://github.com/hyeongyu-data/air-quality-project/issues/46) |
 | 5 | 근거와 증거를 남긴다 | [#52](https://github.com/hyeongyu-data/air-quality-project/issues/52) [#51](https://github.com/hyeongyu-data/air-quality-project/issues/51) [#53](https://github.com/hyeongyu-data/air-quality-project/issues/53) |
@@ -166,12 +172,12 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 - [x] 결측과 실제 0이 코드·저장소·알림 본문에서 구분된다
 - [x] 필수 지표 최소 개수 계약이 있고 미달 시 파이프라인이 실패한다
 - [ ] 공공 API 응답 픽스처 기반 파싱 테스트가 CI에서 돈다
-- [ ] 모든 타임스탬프가 tz-aware이며 컨테이너 TZ에 의존하지 않는다
+- [x] 모든 타임스탬프가 tz-aware이며 컨테이너 TZ에 의존하지 않는다
 
 **전달 보증**
 - [x] 채널별 발송 결과가 저장·집계되고 쿨다운을 전진시키지 않는다 (자동 재시도는 미구현 — 다음 회차에 재발송)
 - [ ] 오프셋은 처리 성공 후 커밋되고 실패 메시지는 DLQ로 간다
-- [ ] 중복 방지 키(`event_id`)가 있고 OpenSearch는 upsert다
+- [x] 중복 방지 키(`event_id`)가 있고 OpenSearch는 upsert다
 - [ ] 무알림이 정상인지 고장인지 하트비트로 구분된다
 
 **상태 영속성**
