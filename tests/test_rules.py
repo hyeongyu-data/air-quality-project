@@ -71,6 +71,26 @@ def test_group_missing_keys_are_safe():
     assert "reasons" in groups["정상"]
 
 
+def test_removed_dead_indices_are_gone():
+    """죽은 코드 2차 청소(#45) 회귀 방지.
+
+    cold_risk / discomfort는 프로듀서·컨슈머 어디서도 생성되지 않는데
+    group_alerts가 계속 참조했다. 위생_강화 그룹은 도달 불가였다.
+    """
+    src = open(rules.__file__, encoding="utf-8").read()
+    assert "cold_risk" not in src
+    assert "discomfort" not in src
+    assert "위생_강화" not in rules.AlertGrouping.ACTION_GROUPS
+    # 조건은 group_alerts 코드가 단일 출처 — 중복 선언 필드가 되살아나지 않도록
+    assert all("conditions" not in g for g in rules.AlertGrouping.ACTION_GROUPS.values())
+
+
+def test_surviving_groups_still_activate():
+    # cold_risk 조건만 걷어냈지 그룹 자체가 사라지면 안 된다
+    assert "외출_자제" in G.group_alerts({"pm10": L.VERY_BAD})
+    assert "수분_섭취" in G.group_alerts({"feels_like_temp": L.BAD})
+
+
 def test_removed_dead_rules_are_gone():
     # 죽은 코드 청소(#11) 회귀 방지: 제거한 규칙표/판정이 되살아나지 않도록
     assert not hasattr(rules.WeatherIndexRules, "OZONE_RULES")
