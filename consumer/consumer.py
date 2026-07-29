@@ -21,6 +21,7 @@ from dotenv import load_dotenv
 
 # 상대 import
 try:
+    from . import opensearch_setup
     from .rules import (
         AlertRuleEngine, AlertGrouping, AlertLevel,
         grade_signature, should_send, core_indices_unknown,
@@ -28,6 +29,7 @@ try:
     from .alert import AlertManager
 except ImportError:
     # 직접 실행 시
+    import opensearch_setup
     from rules import (
         AlertRuleEngine, AlertGrouping, AlertLevel,
         grade_signature, should_send, core_indices_unknown,
@@ -52,30 +54,62 @@ except ImportError:  # 직접 실행 시
 
 
 class OpenSearchConnector:
-    """OpenSearch 연결 관리"""
-    
+    """OpenSearch 연결 관리.
+
+    기동 시 한 번 실패하면 client=None으로 고정되던 구조를 고쳤다. 그 상태에서는
+    쿨다운 조회가 항상 None을 돌려줘 매 메시지마다 전 채널로 발송되고, 이력도
+    한 건도 남지 않는다. 재연결을 시도하되 백오프로 폭주하지 않게 한다.
+    """
+
+    # 연속 실패 시 대기 시간 상한. 매 메시지마다 재시도하면 처리가 느려진다.
+    MAX_RETRY_INTERVAL_SECONDS = 300
+
     def __init__(self):
-        """OpenSearch 클라이언트 초기화"""
+        self.host = os.getenv("OPENSEARCH_HOST", "localhost")
+        self.port = int(os.getenv("OPENSEARCH_PORT", 9200))
+        self.client = None
+        self._next_retry_at = 0.0
+        self._retry_interval = 5.0
+        self.connect()
+
+    def _build_client(self) -> OpenSearch:
+        return OpenSearch(
+            hosts=[{"host": self.host, "port": self.port}],
+            http_auth=None,  # 보안 비활성화 (개발용)
+            use_ssl=False,
+            verify_certs=False,
+            ssl_show_warn=False,
+        )
+
+    def connect(self) -> bool:
+        """연결을 시도한다. 성공하면 인덱스 템플릿·보존 정책을 적용한다."""
         try:
-            host = os.getenv("OPENSEARCH_HOST", "localhost")
-            port = int(os.getenv("OPENSEARCH_PORT", 9200))
-            
-            self.client = OpenSearch(
-                hosts=[{"host": host, "port": port}],
-                http_auth=None,  # 보안 비활성화 (개발용)
-                use_ssl=False,
-                verify_certs=False,
-                ssl_show_warn=False
-            )
-            
-            # 연결 테스트
-            info = self.client.info()
-            logger.info(f"OpenSearch 연결 성공: {host}:{port}")
-            
+            client = self._build_client()
+            client.info()
+            self.client = client
+            self._retry_interval = 5.0
+            logger.info(f"OpenSearch 연결 성공: {self.host}:{self.port}")
+            opensearch_setup.bootstrap(client)
+            return True
         except Exception as e:
-            logger.error(f"OpenSearch 연결 실패: {str(e)}")
             self.client = None
-    
+            self._next_retry_at = time.time() + self._retry_interval
+            logger.error(
+                f"OpenSearch 연결 실패({self._retry_interval:.0f}초 뒤 재시도): {str(e)}"
+            )
+            self._retry_interval = min(
+                self._retry_interval * 2, self.MAX_RETRY_INTERVAL_SECONDS
+            )
+            return False
+
+    def ensure_connection(self) -> bool:
+        """끊겨 있으면 백오프 간격이 지난 뒤 다시 연결을 시도한다."""
+        if self.client is not None:
+            return True
+        if time.time() < self._next_retry_at:
+            return False
+        return self.connect()
+
     def is_connected(self) -> bool:
         """OpenSearch 연결 상태 확인"""
         return self.client is not None
@@ -378,6 +412,10 @@ class WeatherAlertConsumer:
         Returns:
             bool: 메시지 처리 여부
         """
+        # 끊긴 상태로 굳지 않도록 폴링마다 재연결 기회를 준다(백오프 적용).
+        if self.opensearch_connector.ensure_connection():
+            self.alert_manager.opensearch_sender.attach(self.opensearch_connector.client)
+
         message = self.kafka_consumer.consume_messages(timeout_ms=5000)
         
         if message:
