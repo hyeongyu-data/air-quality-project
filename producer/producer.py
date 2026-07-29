@@ -795,7 +795,6 @@ class KMAForecastAPIClient:
             self.last_error = mask_secrets(f"{response.status_code} {response.text[:120]}")
             logger.warning(f"단기예보 API 응답 오류: {self.last_error}")
             return []
-        response.raise_for_status()
         data = response.json()
         
         if not self._is_success_response(data):
@@ -1338,98 +1337,6 @@ class WeatherDataCollector:
         data["forecast_period"] = "current"
         return data
     
-    def collect_and_publish(self, region: str = "서울") -> Dict[str, bool]:
-        """
-        모든 기상 데이터를 수집하고 Kafka로 발행
-        
-        Args:
-            region: 지역명
-        
-        Returns:
-            {
-                "current_weather": True
-            }
-        """
-        logger.info(f"기상 데이터 수집 시작: {region}")
-        current_weather = self.collect_scheduled_weather(region)
-        results = {
-            "current_weather": self.producer.send_current_weather(current_weather)
-        }
-        
-        # 모든 메시지 발행 완료 대기
-        self.producer.flush()
-        
-        success_count = sum(1 for v in results.values() if v)
-        logger.info(f"기상 데이터 수집 완료: {success_count}/{len(results)} 성공")
-        
-        return results
-    
     def close(self):
         """리소스 정리"""
         self.producer.close()
-
-
-def main():
-    """
-    메인 실행 함수
-    Airflow DAG에서 호출될 함수
-    """
-    try:
-        collector = WeatherDataCollector()
-        results = collector.collect_and_publish(region="서울")
-        
-        print("\n" + "=" * 80)
-        print("기상 데이터 수집 결과")
-        print("=" * 80)
-        for data_type, success in results.items():
-            status = "✅ 성공" if success else "❌ 실패"
-            print(f"{data_type}: {status}")
-        
-        collector.close()
-        
-        return results
-        
-    except Exception as e:
-        logger.error(f"프로듀서 실행 중 오류: {str(e)}")
-        return {
-            "current_weather": False
-        }
-
-
-if __name__ == "__main__":
-    # 테스트 코드
-    print("=" * 80)
-    print("기상지수 프로듀서 테스트")
-    print("=" * 80)
-    
-    # API 키 없을 때 테스트 (더미 데이터)
-    print("\n📝 테스트 모드: 실제 API 호출 대신 샘플 데이터 사용")
-    print("-" * 80)
-    
-    # 더미 데이터로 프로듀서 테스트
-    producer = KafkaWeatherProducer()
-
-    # 샘플 현재 기상 통합 데이터
-    sample_weather = {
-        "timestamp": now_kst().isoformat(),
-        "region": "서울",
-        "data_type": "current_weather",
-        "pm10": 45,
-        "pm25": 20,
-        "feels_like_temp": 18,
-        "precipitation_probability": 30,
-        "uv_index": 5,
-    }
-
-    print("\n발행할 샘플 데이터:")
-    print(json.dumps(sample_weather, ensure_ascii=False, indent=2))
-
-    # Kafka 발행 테스트
-    if producer.send_current_weather(sample_weather):
-        print("\n✅ Kafka 발행 성공")
-    else:
-        print("\n❌ Kafka 발행 실패 (Kafka 서버가 실행 중인지 확인하세요)")
-
-    producer.close()
-    
-    print("\n" + "=" * 80)

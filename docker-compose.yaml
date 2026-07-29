@@ -66,9 +66,6 @@ services:
         limits:
           cpus: '1'
           memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     
     # 재시작 정책
     restart: unless-stopped
@@ -171,9 +168,6 @@ services:
         limits:
           cpus: '2'
           memory: 2G
-        reservations:
-          cpus: '1'
-          memory: 1G
     
     # 재시작 정책
     restart: unless-stopped
@@ -230,9 +224,6 @@ services:
         limits:
           cpus: '1'
           memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
     
     # 재시작 정책 (지속 실행)
     restart: unless-stopped
@@ -295,9 +286,6 @@ services:
         limits:
           cpus: '1'
           memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     
     # 재시작 정책
     restart: unless-stopped
@@ -350,9 +338,6 @@ services:
         limits:
           cpus: '0.5'
           memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
     
     # 재시작 정책
     restart: unless-stopped
@@ -363,40 +348,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-# ============================================================================
-# 프로젝트 메타데이터
-# ============================================================================
-# 사용 방법:
-# 
-# 1. 모든 서비스 시작:
-#    docker-compose up -d
-#
-# 2. 서비스 상태 확인:
-#    docker-compose ps
-#
-# 3. 특정 서비스 로그:
-#    docker-compose logs -f [service-name]
-#
-# 4. 서비스 재시작:
-#    docker-compose restart [service-name]
-#
-# 5. 모든 서비스 중지:
-#    docker-compose down
-#
-# 6. 데이터 포함 삭제:
-#    docker-compose down -v
-#
-# ============================================================================
-# 접근 주소:
-#
-# - Airflow UI: http://localhost:8080
-#   기본 계정: airflow / airflow
-#
-# - Kafka UI: http://localhost:8081
-#   모니터링 용도
-#
-# - OpenSearch API: http://localhost:9200
-#   REST API 직접 호출 가능
-#
-# ============================================================================

@@ -389,60 +389,49 @@ class AlertRuleEngine:
 class AlertGrouping:
     """알림을 행동 그룹으로 분류"""
     
-    # 행동 그룹 정의
+    # 행동 그룹 정의.
+    # 조건은 group_alerts() 코드가 단일 출처다. 예전에는 여기에 conditions 필드로
+    # 조건을 한 번 더 적었는데, 아무도 읽지 않는 사이 실제 로직과 어긋났다
+    # (존재하지 않는 지수를 가리키고 있었다).
     ACTION_GROUPS = {
         "마스크_필수": {
             "description": "마스크 착용이 필수인 상황",
-            "conditions": ["미세먼지 나쁨 이상", "황사 중간 이상", "오존 높음 이상"],
             "action": "KF94/KF99 마스크 착용 필수",
             "color": "🔴"
         },
         "외출_자제": {
             "description": "외출을 자제해야 하는 상황",
-            "conditions": ["미세먼지 매우나쁨", "황사 매우나쁨", "감기 고위험"],
             "action": "가급적 외출 자제, 부득이한 경우만 외출",
             "color": "🔴"
         },
         "자외선_차단": {
             "description": "자외선 차단이 필요한 상황",
-            "conditions": ["자외선 높음 이상"],
             "action": "선크림 SPF50+ 필수, 자외선 차단 의류 착용",
             "color": "🟡"
         },
         "알레르기_주의": {
             "description": "꽃가루 알레르기 주의가 필요한 상황",
-            "conditions": ["꽃가루농도위험지수 나쁨 이상"],
             "action": "마스크 착용, 외출 후 세안, 창문 닫기 권고",
             "color": "🟡"
         },
         "우산_준비": {
             "description": "강수 가능성이 높은 상황",
-            "conditions": ["강수확률 60% 이상"],
             "action": "우산 또는 우비 준비",
             "color": "🔵"
         },
         "특보_확인": {
             "description": "특보성 기상 신호가 있는 상황",
-            "conditions": ["낙뢰/강풍/강수 가능 신호"],
             "action": "최신 기상특보와 외출 안전 확인",
             "color": "🔴"
         },
         "보온_필수": {
             "description": "보온이 필요한 상황",
-            "conditions": ["체감온도 0도 이하"],
             "action": "내복, 외투, 장갑, 목도리 필수",
             "color": "🔵"
         },
         "수분_섭취": {
             "description": "수분 섭취가 필요한 상황",
-            "conditions": ["불쾌지수 높음 이상", "체감온도 25도 이상"],
             "action": "충분한 수분 섭취, 가볍고 통풍 좋은 옷 착용",
-            "color": "🟡"
-        },
-        "위생_강화": {
-            "description": "개인위생 강화가 필요한 상황",
-            "conditions": ["감기 주의 이상"],
-            "action": "손씻기, 손소독, 사람 많은 곳 피하기",
             "color": "🟡"
         },
     }
@@ -491,12 +480,10 @@ class AlertGrouping:
         
         # 외출 자제
         if (classification_results.get("pm10") == AlertLevel.VERY_BAD or
-            classification_results.get("dust") == AlertLevel.VERY_BAD or
-            classification_results.get("cold_risk") == AlertLevel.VERY_BAD):
+            classification_results.get("dust") == AlertLevel.VERY_BAD):
             activate_group("외출_자제", [
                 f"미세먼지: {format_level(classification_results.get('pm10'))}",
-                f"황사: {format_level(classification_results.get('dust'))}",
-                f"감기위험: {format_level(classification_results.get('cold_risk'))}"
+                f"황사: {format_level(classification_results.get('dust'))}"
             ])
         
         # 자외선 차단
@@ -532,19 +519,9 @@ class AlertGrouping:
             ])
         
         # 수분 섭취
-        if (
-            classification_results.get("discomfort") in [AlertLevel.BAD, AlertLevel.VERY_BAD] or
-            classification_results.get("feels_like_temp") in [AlertLevel.BAD, AlertLevel.VERY_BAD]
-        ):
+        if classification_results.get("feels_like_temp") in [AlertLevel.BAD, AlertLevel.VERY_BAD]:
             activate_group("수분_섭취", [
-                f"불쾌지수: {format_level(classification_results.get('discomfort'))}",
                 f"체감온도: {format_level(classification_results.get('feels_like_temp'))}"
-            ])
-        
-        # 위생 강화
-        if classification_results.get("cold_risk") in [AlertLevel.NORMAL, AlertLevel.BAD]:
-            activate_group("위생_강화", [
-                f"감기위험: {format_level(classification_results.get('cold_risk'))}"
             ])
         
         if activated_groups:
@@ -558,7 +535,6 @@ class AlertGrouping:
             ]
             return {"정보부족": {
                 "description": "일부 지수를 수집하지 못해 판정할 수 없음",
-                "conditions": [],
                 "action": "수집 실패 항목은 기상청·에어코리아에서 직접 확인 권고",
                 "color": "❔",
                 "reasons": [f"수집 실패: {', '.join(sorted(unknown_keys))}"],
@@ -566,52 +542,8 @@ class AlertGrouping:
 
         normal_info = {
             "description": "모든 지수가 정상범위",
-            "conditions": [],
             "action": "특별 조치 없음",
             "color": "✅",
             "reasons": ["모든 지수가 정상범위"],
         }
         return {"정상": normal_info}
-
-
-if __name__ == "__main__":
-    # 테스트 코드
-    print("=" * 60)
-    print("기상지수 알림 규칙 테스트")
-    print("=" * 60)
-    
-    # 미세먼지 테스트
-    pm10_value = 120
-    level, recommendation, emoji = AlertRuleEngine.classify_pm10(pm10_value)
-    print(f"\n미세먼지: {pm10_value} μg/m³")
-    print(f"등급: {emoji} {level.value}")
-    print(f"권고: {recommendation}")
-    
-    # 자외선 테스트
-    uv_value = 8
-    level, recommendation, emoji = AlertRuleEngine.classify_uv_index(uv_value)
-    print(f"\n자외선 지수: {uv_value}")
-    print(f"등급: {emoji} {level.value}")
-    print(f"권고: {recommendation}")
-    
-    # 알림 그룹화 테스트
-    test_results = {
-        "pm10": AlertLevel.BAD,
-        "pm25": AlertLevel.NORMAL,
-        "uv_index": AlertLevel.BAD,
-        "dust": AlertLevel.NORMAL,
-        "cold_risk": AlertLevel.NORMAL,
-        "discomfort": AlertLevel.NORMAL,
-        "feels_like_temp": AlertLevel.GOOD,
-    }
-    
-    print("\n" + "=" * 60)
-    print("알림 그룹화 결과")
-    print("=" * 60)
-    grouped = AlertGrouping.group_alerts(test_results)
-    for group_name, group_info in grouped.items():
-        print(f"\n{group_info.get('color', '')} {group_name}")
-        print(f"  설명: {group_info.get('description', '')}")
-        print(f"  행동: {group_info.get('action', '')}")
-        for reason in group_info.get("reasons", []):
-            print(f"  원인: {reason}")
