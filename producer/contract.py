@@ -8,9 +8,11 @@
 
 from datetime import datetime
 from typing import Dict, Optional
-from zoneinfo import ZoneInfo
 
-KST = ZoneInfo("Asia/Seoul")
+try:
+    from .timeutil import KST, now_kst, to_kst
+except ImportError:  # 직접 실행 / pythonpath 경유
+    from timeutil import KST, now_kst, to_kst
 
 # 알림 판정에 실제로 쓰이는 수치 지수
 NUMERIC_INDEX_KEYS = (
@@ -70,8 +72,5 @@ def build_event_id(region: str, run_dt: Optional[datetime] = None) -> str:
     충분하다. 분 단위로 내리면 재시도 간 값이 갈린다.
     """
     if run_dt is None:
-        run_dt = datetime.now(KST)
-    if run_dt.tzinfo is None:
-        # naive 입력은 KST로 본다. 이 프로젝트의 모든 스케줄 기준은 KST다.
-        run_dt = run_dt.replace(tzinfo=KST)
-    return f"{region}:{run_dt.astimezone(KST).strftime('%Y%m%d%H')}"
+        run_dt = now_kst()
+    return f"{region}:{to_kst(run_dt).strftime('%Y%m%d%H')}"

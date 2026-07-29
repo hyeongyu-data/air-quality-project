@@ -32,6 +32,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+try:
+    from .timeutil import now_kst
+except ImportError:  # 직접 실행 시
+    from timeutil import now_kst
+
+
 # refresh token 잔여 기간이 이 값 아래로 내려가면 경고한다(기본 7일).
 KAKAO_REFRESH_EXPIRY_WARN_SECONDS = int(
     os.getenv("KAKAO_REFRESH_EXPIRY_WARN_SECONDS", 7 * 24 * 3600)
@@ -74,7 +80,7 @@ class ConsoleAlertSender:
             bool: 발송 성공 여부
         """
         try:
-            timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+            timestamp = alert_data.get("timestamp", now_kst().isoformat())
             region = alert_data.get("region", "전국")
             
             # 헤더
@@ -207,7 +213,7 @@ class SlackAlertSender:
         Returns:
             Slack Webhook 형식의 메시지
         """
-        timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+        timestamp = alert_data.get("timestamp", now_kst().isoformat())
         region = alert_data.get("region", "전국")
         indices = alert_data.get("indices", {})
         levels = alert_data.get("levels", {})
@@ -340,7 +346,7 @@ def _alert_display_rows(alert_data: Dict) -> List[Dict]:
 def _build_weather_email(alert_data: Dict) -> Dict[str, str]:
     """규칙 판정 결과를 이메일 제목/본문으로 변환"""
     region = alert_data.get("region", "서울")
-    timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+    timestamp = alert_data.get("timestamp", now_kst().isoformat())
     data_warnings = alert_data.get("data_warnings", {})
     action_groups = alert_data.get("action_groups", {})
     raw_data = alert_data.get("raw_data", {})
@@ -758,7 +764,7 @@ class OpenSearchAlertSender:
             return False
         
         try:
-            timestamp = alert_data.get("timestamp", datetime.now().isoformat())
+            timestamp = alert_data.get("timestamp", now_kst().isoformat())
             
             # 인덱스 이름: weather-alert-2026.04.28
             date_str = datetime.fromisoformat(timestamp).strftime("%Y.%m.%d")
@@ -934,7 +940,7 @@ if __name__ == "__main__":
     
     # 테스트 데이터
     test_alert_data = {
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": now_kst().isoformat(),
         "region": "서울",
         "indices": {
             "pm10": 120,

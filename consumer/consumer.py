@@ -44,6 +44,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+try:
+    from .timeutil import now_kst
+except ImportError:  # 직접 실행 시
+    from timeutil import now_kst
+
+
 
 class OpenSearchConnector:
     """OpenSearch 연결 관리"""
@@ -96,7 +102,7 @@ class WeatherDataProcessor:
     @staticmethod
     def process_current_weather(data: Dict) -> Dict:
         """서울 현재 기상 통합 데이터 처리"""
-        timestamp = data.get("timestamp", datetime.now().isoformat())
+        timestamp = data.get("timestamp", now_kst().isoformat())
         region = data.get("region", "서울")
         
         oak_pollen_val = WeatherDataProcessor._safe_float(data.get("oak_pollen"))
@@ -457,7 +463,7 @@ if __name__ == "__main__" and os.getenv("RUN_CONSUMER_TESTS", "false").lower() =
     # 테스트 메시지 (실제 Kafka 메시지 형식)
     test_messages = [
         {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": "서울",
             "pm10": 120,
             "pm25": 45,
@@ -468,13 +474,13 @@ if __name__ == "__main__" and os.getenv("RUN_CONSUMER_TESTS", "false").lower() =
             "data_type": "air_quality"
         },
         {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": "서울",
             "uv_index": 8,
             "data_type": "uv_index"
         },
         {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": now_kst().isoformat(),
             "region": "서울",
             "data_type": "current_weather",
             "oak_pollen": 3,
