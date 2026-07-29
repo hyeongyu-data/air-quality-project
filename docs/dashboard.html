@@ -247,7 +247,7 @@ footer{
     <div class="meta">
       <span>진단일 2026-07-29</span>
       <span>검토 대상 5,077 LOC</span>
-      <span>등록 이슈 36건 · 해결 14건</span>
+      <span>등록 이슈 36건 · 해결 18건</span>
       <span><a href="https://github.com/hyeongyu-data/air-quality-project">github.com/hyeongyu-data/air-quality-project</a></span>
     </div>
   </header>
@@ -297,7 +297,7 @@ footer{
         <header>
           <span class="chip g3">해결됨</span>
           <h3>이번 회차에 고치고 머지한 것</h3>
-          <span class="count num">5건</span>
+          <span class="count num">10건</span>
         </header>
         <div class="rows">
           <div class="row done">
@@ -338,6 +338,34 @@ footer{
             <em>갱신 응답의 새 토큰을 로그만 남기고 폐기해, 기존 토큰 만료 시점에 카카오 알림이 영구 중단된다.</em></div>
             <span class="where">consumer/alert.py:655-656</span>
           </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/39">#39</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/65">PR #65</a>
+            <div class="what"><b>전 구간 naive datetime</b>
+            <em>오프셋 없는 ISO를 OpenSearch가 UTC로 읽어 이력이 9시간 밀린다. AWS(UTC 기본)로 옮기는 순간 오늘 예보 필터가 전량 비어 오탐으로 직결된다.</em></div>
+            <span class="where">producer/producer.py:1134<br>consumer/alert.py:692</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/41">#41</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/64">PR #64</a>
+            <div class="what"><b>멱등성 부재</b>
+            <em>발행·색인 어디에도 키가 없다. 재시도 = 중복 발행, 재처리 = 중복 문서. <span class="num">_id</span> 한 줄이면 해결되는 것도 안 돼 있다.</em></div>
+            <span class="where">producer/producer.py:1030<br>consumer/alert.py:712</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/44">#44</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/66">PR #66</a>
+            <div class="what"><b>황사가 상시 "좋음"인 죽은 지표</b>
+            <em>PM10을 프록시로 복사하는데 황사 GOOD 임계가 150이라 사실상 항상 좋음이다. pm10 수치는 전 측정소 평균인데 등급은 첫 측정소 것을 그대로 쓴다.</em></div>
+            <span class="where">producer/producer.py:666,696</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/45">#45</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/67">PR #67</a>
+            <div class="what"><b>죽은 코드 2차</b><em>도달 불가 분기(<span class="num">cold_risk</span>·<span class="num">discomfort</span>), 중복 발행 경로, 더미 데이터를 실 토픽에 쏘는 <span class="num">__main__</span> 4곳.</em></div>
+            <span class="where">rules.py · producer.py · consumer.py</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/55">#55</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/57">PR #57</a>
+            <div class="what"><b>진행 현황 대시보드</b><em>지금 보고 있는 이 문서. 저장소 안에 정적 파일로 완결된다.</em></div>
+            <span class="where">docs/dashboard.html</span>
+          </div>
         </div>
       </div>
 
@@ -371,26 +399,14 @@ footer{
         <header>
           <span class="chip g1">나쁨 · P1</span>
           <h3>데이터가 조용히 틀어지거나, 장애를 인지할 수 없다</h3>
-          <span class="count num">9건 남음</span>
+          <span class="count num">6건 남음</span>
         </header>
         <div class="rows">
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/39">#39</a></span>
-            <div class="what"><b>전 구간 naive datetime</b>
-            <em>오프셋 없는 ISO를 OpenSearch가 UTC로 읽어 이력이 9시간 밀린다. AWS(UTC 기본)로 옮기는 순간 오늘 예보 필터가 전량 비어 오탐으로 직결된다.</em></div>
-            <span class="where">producer/producer.py:1134<br>consumer/alert.py:692</span>
-          </div>
           <div class="row s1">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a></span>
             <div class="what"><b>컨슈머가 1시간마다 자살한다</b>
             <em>정상 종료와 크래시 루프가 로그상 구분되지 않는다. 재시작 시 연결 실패는 그 1시간 동안 고정된다.</em></div>
             <span class="where">consumer/consumer.py:400-409</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/41">#41</a></span>
-            <div class="what"><b>멱등성 부재</b>
-            <em>발행·색인 어디에도 키가 없다. 재시도 = 중복 발행, 재처리 = 중복 문서. <span class="num">_id</span> 한 줄이면 해결되는 것도 안 돼 있다.</em></div>
-            <span class="where">producer/producer.py:1030<br>consumer/alert.py:712</span>
           </div>
           <div class="row s1">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a></span>
@@ -403,12 +419,6 @@ footer{
             <div class="what"><b>테스트가 rules.py 한 모듈뿐</b>
             <em>커버리지가 낮은 게 아니라 테스트 가능하게 설계되지 않았다. 순수 함수인 <span class="num">send_all(send_external=False)</span>조차 미검증 — 쿨다운의 핵심 계약이다.</em></div>
             <span class="where">tests/ · pytest.ini</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/44">#44</a></span>
-            <div class="what"><b>황사가 상시 "좋음"인 죽은 지표</b>
-            <em>PM10을 프록시로 복사하는데 황사 GOOD 임계가 150이라 사실상 항상 좋음이다. pm10 수치는 전 측정소 평균인데 등급은 첫 측정소 것을 그대로 쓴다.</em></div>
-            <span class="where">producer/producer.py:666,696</span>
           </div>
           <div class="row s1">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/47">#47</a></span>
@@ -435,14 +445,9 @@ footer{
         <header>
           <span class="chip g2">보통 · P2</span>
           <h3>구조·재현성·프로세스 부채</h3>
-          <span class="count num">7건</span>
+          <span class="count num">6건 남음</span>
         </header>
         <div class="rows">
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/45">#45</a></span>
-            <div class="what"><b>죽은 코드 2차</b><em>도달 불가 분기(<span class="num">cold_risk</span>·<span class="num">discomfort</span>), 중복 발행 경로, 더미 데이터를 실 토픽에 쏘는 <span class="num">__main__</span> 4곳.</em></div>
-            <span class="where">rules.py · producer.py · consumer.py</span>
-          </div>
           <div class="row s2">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/46">#46</a></span>
             <div class="what"><b>producer.py 3중 복붙</b><em>같은 유틸 5종이 세 클라이언트에 복사돼 있고 <span class="num">_safe_float</span>의 기본값만 서로 다르다. 그 차이가 #33의 온상이다.</em></div>
@@ -480,7 +485,7 @@ footer{
         <header>
           <span class="chip solid">문서 · 서사</span>
           <h3>코드는 있는데 근거가 없다</h3>
-          <span class="count num">5건</span>
+          <span class="count num">4건 남음</span>
         </header>
         <div class="rows">
           <div class="row s3">
@@ -503,11 +508,6 @@ footer{
             <div class="what"><b>운영 관측 대시보드 부재</b><em>런타임 상태를 한 화면에서 볼 수단이 없다. #49가 만들어낼 측정값이 선행 조건.</em></div>
             <span class="where">신규</span>
           </div>
-          <div class="row s3">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/55">#55</a></span>
-            <div class="what"><b>진행 현황 대시보드</b><em>지금 보고 있는 이 문서. 저장소 안에 정적 파일로 완결된다.</em></div>
-            <span class="where">docs/dashboard.html</span>
-          </div>
         </div>
       </div>
 
@@ -525,13 +525,13 @@ footer{
           <tr><th>영역</th><th>해결</th><th>매우나쁨</th><th>나쁨</th><th>보통</th><th>남음</th><th>한 줄 진단</th></tr>
         </thead>
         <tbody>
-          <tr><td>데이터 품질</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n">0</td><td class="n"><b>2</b></td><td>결측과 0을 구분하게 됐다. 남은 것은 죽은 지표와 계약 테스트.</td></tr>
-          <tr><td>전달 보증</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>실패가 성공으로 기록되던 경로를 끊었다. 오프셋·DLQ가 남았다.</td></tr>
-          <tr><td>상태 영속성</td><td class="n zero">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n">0</td><td class="n"><b>3</b></td><td>재생성 한 번에 토픽·오프셋·DAG 상태가 사라진다. Docker 검증 필요.</td></tr>
-          <tr><td>보안</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>2</b></td><td>키가 로그·페이로드로 새던 경로를 막았다. 운영 프로필이 남았다.</td></tr>
-          <tr><td>관측성</td><td class="n zero">0</td><td class="n">0</td><td class="n"><b>1</b></td><td class="n"><b>1</b></td><td class="n"><b>2</b></td><td>측정값이 없어 무엇이 고장인지 말할 수 없다.</td></tr>
-          <tr><td>구조 · 재현성</td><td class="n zero">0</td><td class="n">0</td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td class="n"><b>4</b></td><td>선언된 의존성과 실제 실행 환경이 다르다.</td></tr>
-          <tr><td>문서 · 서사</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>4</b></td><td class="n"><b>4</b></td><td>결정의 근거와 실행의 증거를 남기는 일이 남았다.</td></tr>
+          <tr><td>데이터 품질</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n">0</td><td class="n"><b>1</b></td><td class="n">0</td><td class="n"><b>1</b></td><td>결측·시간대·죽은 지표를 정리했다. 파싱 계약 테스트가 남았다.</td></tr>
+          <tr><td>전달 보증</td><td class="n" style="color:var(--g-good)"><b>4</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>실패가 성공으로 기록되던 경로를 끊고 멱등성을 넣었다. 오프셋·DLQ가 남았다.</td></tr>
+          <tr><td>상태 영속성</td><td class="n" style="color:var(--g-good)"><b>0</b></td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n">0</td><td class="n"><b>3</b></td><td>재생성 한 번에 토픽·오프셋·DAG 상태가 사라진다. Docker 검증 필요.</td></tr>
+          <tr><td>보안</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>2</b></td><td>키가 새던 경로를 막았다. 운영 프로필과 CI 스캐닝이 남았다.</td></tr>
+          <tr><td>관측성</td><td class="n" style="color:var(--g-good)"><b>0</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>측정값이 없어 무엇이 고장인지 말할 수 없다.</td></tr>
+          <tr><td>구조 · 재현성</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>3</b></td><td class="n"><b>3</b></td><td>죽은 코드를 걷어냈다. 의존성 정합성과 producer 분해가 남았다.</td></tr>
+          <tr><td>문서 · 서사</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>3</b></td><td class="n"><b>3</b></td><td>결정의 근거와 실행의 증거를 남기는 일이 남았다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -657,12 +657,12 @@ footer{
     </div>
     <div class="tally">
       <div class="card"><p class="who">등록 이슈</p><b class="num">36</b><p class="note">누적</p></div>
-      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">14</b><p class="note">이번 회차 7건 포함</p></div>
-      <div class="card"><p class="who">머지된 PR</p><b class="num" style="color:var(--g-good)">8</b><p class="note">#31 #56 #57 #58 #59 #60 #61 #62</p></div>
-      <div class="card"><p class="who">남음</p><b class="num">22</b><p class="note">P0 2 · P1 9 · P2 7 · 문서 4</p></div>
+      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">18</b><p class="note">이번 회차 11건 포함</p></div>
+      <div class="card"><p class="who">머지된 PR</p><b class="num" style="color:var(--g-good)">13</b><p class="note">#31 #56~#67</p></div>
+      <div class="card"><p class="who">남음</p><b class="num">18</b><p class="note">P0 2 · P1 6 · P2 6 · 문서 4</p></div>
     </div>
     <div class="callout">
-      <p><b>이번 회차에 끝낸 것.</b> 사용자에게 틀린 정보가 나가는 경로(결측 0 치환)와 실패가 성공으로 기록되던 경로(쿨다운 전진·DAG 성공 반환), 그리고 키가 로그·페이로드로 새던 경로를 막았습니다. 회귀 테스트는 18개에서 <span class="num">68개</span>로 늘었습니다.</p>
+      <p><b>이번 회차에 끝낸 것.</b> 사용자에게 틀린 정보가 나가는 경로(결측 0 치환·황사 죽은 지표·타임존), 실패가 성공으로 기록되던 경로(쿨다운 전진·DAG 성공 반환), 키가 로그·페이로드로 새던 경로를 막고 발행·색인에 멱등성을 넣었습니다. 회귀 테스트는 18개에서 <span class="num">101개</span>로 늘었고, 죽은 코드 <span class="num">354줄</span>을 걷어냈습니다.</p>
       <p><b>다음 두 건은 Docker가 필요합니다.</b> Kafka 영속 볼륨(<a href="https://github.com/hyeongyu-data/air-quality-project/issues/36">#36</a>)과 OpenSearch 재연결·인덱스 템플릿(<a href="https://github.com/hyeongyu-data/air-quality-project/issues/37">#37</a>)은 볼륨 권한과 기동 순서를 실제로 띄워 확인해야 합니다. 검증하지 않은 인프라 변경은 머지하지 않았습니다.</p>
     </div>
   </section>
