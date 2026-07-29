@@ -2,7 +2,9 @@
 
 이 시스템을 실제로 운영한다고 가정했을 때 발생 가능한 장애를 코드 근거와 함께 정리한 문서입니다. 각 항목은 해당 GitHub 이슈로 연결됩니다.
 
-> **진행 상황 (2026-07-29 갱신)** — 1절(데이터 품질) 전체, 2.1·2.2·2.4(전달 보증), 4.1(시크릿 로그), 5절(시간대)을 해결해 머지했고 멱등성도 확보했습니다. 각 절 머리에 상태와 PR 번호를 표기했습니다. 3절(상태 영속성)은 Docker로 실제 기동을 확인해야 하는 인프라 변경이라 검증 전까지 반영하지 않았습니다.
+> **진행 상황 (2026-07-29 갱신)** — **P0 6건을 전량 해결**했습니다. 1절(데이터 품질) 전체, 2.1·2.2·2.4(전달 보증), 3.1·3.3·3.4(영속성·멱등성), 4.1(시크릿 로그), 5절(시간대). 각 절 머리에 상태와 PR 번호를 표기했습니다. 인프라 변경(3.1·3.3)은 Docker로 실제 기동해 확인한 뒤 머지했습니다.
+>
+> 그 과정에서 회귀를 하나 잡았습니다 — 죽은 코드 청소 때 `producer/__init__.py`의 export를 함께 정리하지 않아 DAG가 `ImportError`로 죽고 있었는데 CI는 초록색이었습니다. `compileall`은 문법만 보고, 테스트는 패키지 `__init__`을 거치지 않았기 때문입니다. 패키지 import 테스트로 막았습니다([PR #71](https://github.com/hyeongyu-data/air-quality-project/pull/71)).
 
 ## 요약
 
@@ -82,7 +84,7 @@ SMTP 앱 비밀번호 만료(535), 카카오 refresh token 만료, Slack webhook
 
 ## 3. 상태 영속성 — 재생성 한 번에 사라진다
 
-### 3.1 Kafka 볼륨 부재 ([#36](https://github.com/hyeongyu-data/air-quality-project/issues/36))
+### 3.1 Kafka 볼륨 부재 — **해결됨 (PR #69)** ([#36](https://github.com/hyeongyu-data/air-quality-project/issues/36))
 
 `kafka` 서비스에 `volumes:` 키가 없다. KRaft 메타데이터·로그 세그먼트·`__consumer_offsets`가 전부 컨테이너 쓰기 레이어에 있다. 재생성 시 토픽과 오프셋이 소멸하고, 컨슈머는 `auto_offset_reset='latest'`(`consumer.py:208`)로 재구독해 백로그를 **조용히 스킵**한다. `KAFKA_LOG_RETENTION_HOURS: 24`도 같은 결과를 만든다.
 
@@ -94,7 +96,7 @@ SMTP 앱 비밀번호 만료(535), 카카오 refresh token 만료, Slack webhook
 
 `airflow standalone`은 웹서버·스케줄러·트리거러가 한 SQLite를 공유해 `database is locked` 가능성이 상존하고, 태스크가 스케줄러를 블록하므로 수집이 느려지면 `data_interval_end` 기준 `run_hour`가 실제 시각과 어긋나 **잘못된 수집 모드**로 동작한다.
 
-### 3.3 OpenSearch 미가용 시 쿨다운 무력화 ([#37](https://github.com/hyeongyu-data/air-quality-project/issues/37))
+### 3.3 OpenSearch 미가용 시 쿨다운 무력화 — **해결됨 (PR #70)** ([#37](https://github.com/hyeongyu-data/air-quality-project/issues/37))
 
 생성자에서 예외를 삼키고 `client = None`으로 고정한다(`consumer.py:63-65`). 재연결이 없어 다음 재시작 전까지 그 상태가 유지되고, 그동안 `latest_signature()`가 항상 `None`을 반환해 **매 메시지마다 전 채널 발송**이 일어난다.
 
@@ -155,7 +157,7 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 | 순서 | 목표 | 이슈 |
 | --- | --- | --- |
 | 1 ✔ | 거짓말을 멈춘다 — 틀린 정보 발송과 실패의 성공 보고를 끊는다 | ~~[#33](https://github.com/hyeongyu-data/air-quality-project/issues/33) [#34](https://github.com/hyeongyu-data/air-quality-project/issues/34) [#35](https://github.com/hyeongyu-data/air-quality-project/issues/35) [#38](https://github.com/hyeongyu-data/air-quality-project/issues/38) [#50](https://github.com/hyeongyu-data/air-quality-project/issues/50)~~ 완료 |
-| 2 | 상태를 잃지 않는다 — 영속성과 멱등성 | ~~[#41](https://github.com/hyeongyu-data/air-quality-project/issues/41)~~ 완료 · [#36](https://github.com/hyeongyu-data/air-quality-project/issues/36) [#37](https://github.com/hyeongyu-data/air-quality-project/issues/37) [#47](https://github.com/hyeongyu-data/air-quality-project/issues/47) — Docker 검증 필요 |
+| 2 ✔ | 상태를 잃지 않는다 — 영속성과 멱등성 | ~~[#41](https://github.com/hyeongyu-data/air-quality-project/issues/41) [#36](https://github.com/hyeongyu-data/air-quality-project/issues/36) [#37](https://github.com/hyeongyu-data/air-quality-project/issues/37)~~ 완료 · [#47](https://github.com/hyeongyu-data/air-quality-project/issues/47) Airflow 메타DB 남음 |
 | 3 | 측정할 수 있게 만든다 | [#49](https://github.com/hyeongyu-data/air-quality-project/issues/49) [#42](https://github.com/hyeongyu-data/air-quality-project/issues/42) [#40](https://github.com/hyeongyu-data/air-quality-project/issues/40) |
 | 4 | 회귀를 막는다 — 테스트 가능한 구조로 바꾼 뒤 리팩터링 | [#43](https://github.com/hyeongyu-data/air-quality-project/issues/43) [#48](https://github.com/hyeongyu-data/air-quality-project/issues/48) [#45](https://github.com/hyeongyu-data/air-quality-project/issues/45) [#46](https://github.com/hyeongyu-data/air-quality-project/issues/46) |
 | 5 | 근거와 증거를 남긴다 | [#52](https://github.com/hyeongyu-data/air-quality-project/issues/52) [#51](https://github.com/hyeongyu-data/air-quality-project/issues/51) [#53](https://github.com/hyeongyu-data/air-quality-project/issues/53) |
@@ -181,8 +183,8 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 - [ ] 무알림이 정상인지 고장인지 하트비트로 구분된다
 
 **상태 영속성**
-- [ ] Kafka 로그·OpenSearch 데이터·Airflow 메타DB가 각각 명명 볼륨(또는 관리형 서비스)에 있다
-- [ ] 인덱스 보존 정책(ISM)과 로그 보존 정책이 설정돼 있다
+- [ ] Kafka 로그·OpenSearch 데이터·Airflow 메타DB가 각각 명명 볼륨에 있다 (Kafka·OpenSearch 완료, **Airflow 메타DB 남음** — #47)
+- [x] 인덱스 보존 정책(ISM 90일)이 설정돼 있다 (로그 보존 정책은 #47)
 - [ ] 디스크 사용률 알람이 있다
 
 **오케스트레이션**
