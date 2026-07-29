@@ -1,6 +1,6 @@
 # 서울 기상 알림 시스템
 
-서울 지역의 기상/대기질 데이터를 매 시간 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
+서울 지역의 기상/대기질 데이터를 하루 네 번(00·06·12·18시) 수집해 Kafka에 발행하고, Consumer가 `consumer/rules.py`의 규칙으로 행동 권고를 만든 뒤 OpenSearch, 콘솔, Slack, 이메일, 카카오톡으로 전달하는 로컬 Docker 기반 알림 시스템입니다.
 
 ## 프로젝트 현황
 
@@ -32,7 +32,7 @@
 
 ```mermaid
 flowchart LR
-    A["Airflow DAG<br/>매시간 실행"] --> B["WeatherDataCollector<br/>기상청/에어코리아 수집"]
+    A["Airflow DAG<br/>6시간마다 실행"] --> B["WeatherDataCollector<br/>기상청/에어코리아 수집"]
     B --> C["Kafka topic<br/>seoul-weather"]
     C --> D["Consumer"]
     D --> E["rules.py<br/>등급/행동 권고"]
@@ -48,7 +48,7 @@ Airflow는 데이터를 수집해 Kafka에 발행합니다. Consumer는 Kafka �
 
 | 구성 | 버전/이미지 | 역할 |
 | --- | --- | --- |
-| Airflow | `apache/airflow:2.10.0` | 매시간 스케줄링, 데이터 수집, Kafka 발행 |
+| Airflow | `apache/airflow:2.10.0` | 6시간 주기 스케줄링, 데이터 수집, Kafka 발행 |
 | Kafka | `apache/kafka:3.7.0` | 기상 데이터 메시지 브로커 |
 | Consumer | Python Docker image | 규칙 판정, 알림, OpenSearch 저장 |
 | OpenSearch | `opensearchproject/opensearch:2.8.0` | 알림 이력 저장/검색 |
@@ -132,7 +132,9 @@ Airflow 계정은 컨테이너 시작 시 자동 생성되며, 이미 존재하�
 
 ## DAG 실행
 
-Airflow UI에서 `realtime_weather_alert` DAG를 켜면 매 시간 정각에 실행됩니다. 00시는 오늘 전체 예보, 06시는 아침 요약, 나머지 시간은 현재 기준 알림으로 처리됩니다.
+Airflow UI에서 `realtime_weather_alert` DAG를 켜면 KST 00·06·12·18시에 실행됩니다. 00시는 오늘 전체 예보, 06시는 아침 요약, 12·18시는 현재 기준 알림입니다.
+
+이 네 시각은 `producer.collect_scheduled_weather()`가 분기를 정의한 시각과 같습니다. 수동 트리거는 아무 때나 가능하며, 그 경우 현재 기준 알림으로 처리됩니다.
 
 수동 실행:
 
