@@ -166,14 +166,14 @@ def fetch_current_weather_data(**context) -> Dict:
         try:
             from producer.producer import WeatherDataCollector
             from producer.contract import (
-                collected_index_count, is_publishable, missing_index_keys,
+                build_event_id, collected_index_count, is_publishable, missing_index_keys,
             )
         except ImportError:
             import sys
             sys.path.insert(0, "/opt/airflow")
             from producer.producer import WeatherDataCollector
             from producer.contract import (
-                collected_index_count, is_publishable, missing_index_keys,
+                build_event_id, collected_index_count, is_publishable, missing_index_keys,
             )
         
         run_dt = context.get("data_interval_end") or pendulum.now(local_tz)
@@ -191,6 +191,10 @@ def fetch_current_weather_data(**context) -> Dict:
                 f"(결측: {missing_index_keys(current_weather)}, "
                 f"경고: {(current_weather or {}).get('data_warnings', {})})"
             )
+
+        # 스케줄 슬롯 기준 결정적 키. 태스크가 재시도돼도 같은 값이라
+        # 중복 발행·중복 색인이 하류에서 걸러진다.
+        current_weather["event_id"] = build_event_id("서울", run_dt)
 
         collected = collected_index_count(current_weather)
         missing = missing_index_keys(current_weather)

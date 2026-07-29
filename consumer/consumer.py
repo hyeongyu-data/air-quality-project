@@ -320,6 +320,8 @@ class WeatherAlertConsumer:
             processed["action_groups"] = alert_groups
             processed["data_warnings"] = message.get("data_warnings", {})
             processed["raw_data"] = message
+            # 재처리·재시도 시 같은 문서를 덮어쓰도록 이벤트 키를 넘긴다.
+            processed["event_id"] = message.get("event_id")
 
             # 쿨다운/중복제거: 등급 시그니처가 직전과 바뀔 때만 외부 채널 발송.
             # 직전 상태는 재시작에도 살아남는 OpenSearch에서 읽는다(fail-open).

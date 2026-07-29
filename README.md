@@ -208,6 +208,21 @@ Consumer는 등급이 직전과 바뀔 때만 외부 채널(Slack/이메일/카�
 | 강수확률 | 00시/06시는 오늘 최대값, 12시/18시는 현재 가까운 예보 |
 | 자외선지수 | 기상청 UV API의 시간별 `h*` 값 중 현재 시각 이하의 가장 최근 값 |
 
+## 멱등성
+
+각 수집 이벤트에는 **예정된 실행 시각 기준**의 결정적 키 `event_id`가 붙습니다(`지역:YYYYMMDDHH`, KST). 벽시계가 아니라 스케줄 슬롯에서 만들기 때문에 태스크가 재시도돼도 값이 같습니다.
+
+| 지점 | 중복 방지 |
+| --- | --- |
+| Kafka 발행 | `enable_idempotence=True` + `acks=all` — 프로듀서 재시도를 브로커가 걸러냄 |
+| OpenSearch 색인 | `_id = event_id` — 같은 이벤트를 재처리하면 문서를 덮어씀 |
+
+확인 방법 — 같은 시각의 DAG를 여러 번 트리거한 뒤 문서 수가 1건인지 봅니다.
+
+```bash
+curl -s "http://localhost:9200/weather-alert-*/_search?q=event_id:%22서울:2026072912%22" | grep -o '"total":{"value":[0-9]*'
+```
+
 ## 실패 처리
 
 DAG는 다음 경우에 태스크를 실패시킵니다. 실패는 `on_failure_callback`으로 Slack에 통보되며(`SLACK_ENABLED=true`이고 웹훅이 설정된 경우), `retries: 2`가 그때 실제로 동작합니다.

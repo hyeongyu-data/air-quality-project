@@ -776,14 +776,17 @@ class OpenSearchAlertSender:
                 # 다음 메시지의 쿨다운 비교 기준(등급 시그니처).
                 # 외부 발송이 전부 실패했다면 비워 둬서 다음 회차에 재시도하게 한다.
                 "grade_signature": alert_data.get("grade_signature", "") if record_signature else "",
+                "event_id": alert_data.get("event_id"),
                 "delivered_channels": alert_data.get("delivered_channels", []),
                 "signature_recorded": record_signature,
             }
             
-            # OpenSearch에 저장
+            # event_id가 있으면 문서 ID로 써서 upsert 한다. 없으면 자동 생성이라
+            # 같은 이벤트를 재처리할 때마다 문서가 새로 쌓인다.
             response = self.client.index(
                 index=index_name,
-                body=doc
+                body=doc,
+                id=alert_data.get("event_id") or None,
             )
             
             logger.info(f"OpenSearch 저장 성공: {index_name} (ID: {response['_id']})")

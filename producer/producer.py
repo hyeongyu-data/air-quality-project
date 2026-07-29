@@ -1034,7 +1034,10 @@ class KafkaWeatherProducer:
                 bootstrap_servers=self.bootstrap_servers,
                 value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode('utf-8'),
                 acks='all',
-                retries=3
+                retries=3,
+                # 재시도 시 브로커가 중복 레코드를 걸러낸다. acks='all'이 전제 조건이라
+                # 위 설정과 함께여야 의미가 있다.
+                enable_idempotence=True,
             )
             logger.info(f"Kafka 프로듀서 초기화 성공: {self.bootstrap_servers}")
         except Exception as e:
@@ -1054,7 +1057,10 @@ class KafkaWeatherProducer:
                 key=data.get("region", "서울").encode('utf-8')
             )
             record_metadata = future.get(timeout=5)
-            logger.info(f"서울 현재 기상 통합 데이터 발행 성공: 오프셋={record_metadata.offset}")
+            logger.info(
+                "서울 현재 기상 통합 데이터 발행 성공: "
+                f"event_id={data.get('event_id')} 오프셋={record_metadata.offset}"
+            )
             return True
             
         except Exception as e:
