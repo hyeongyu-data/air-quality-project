@@ -25,9 +25,10 @@ jobs:
         run: python -m compileall producer consumer dags scripts
 
       - name: Install test deps
-        # consumer/alert.py가 requests와 python-dotenv를 import 한다.
-        # 없으면 카카오 토큰 테스트가 조용히 skip되므로 명시적으로 설치한다.
-        run: pip install pytest requests python-dotenv
+        # 패키지 import 스모크 테스트가 실제 런타임 의존성을 필요로 한다.
+        # compileall은 문법만 보므로 __init__.py가 없는 이름을 export 해도
+        # 잡지 못한다(실제로 DAG가 깨진 적이 있다).
+        run: pip install pytest requests python-dotenv kafka-python opensearch-py
 
       # 순수 함수 단위 테스트 (consumer/rules.py 등)
       - name: Run tests
