@@ -222,7 +222,10 @@ class KafkaWeatherConsumer:
                 bootstrap_servers=self.bootstrap_servers,
                 group_id=self.group_id,
                 value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-                auto_offset_reset='latest',
+                # earliest: 컨슈머가 죽어 있던 동안 쌓인 메시지를 건너뛰지 않는다.
+                # latest면 재구독 시 백로그가 조용히 사라진다. 중복은 등급
+                # 시그니처 쿨다운과 event_id 기반 upsert가 흡수한다.
+                auto_offset_reset='earliest',
                 enable_auto_commit=True,
                 max_poll_records=1
             )

@@ -208,6 +208,19 @@ Consumer는 등급이 직전과 바뀔 때만 외부 채널(Slack/이메일/카�
 | 강수확률 | 00시/06시는 오늘 최대값, 12시/18시는 현재 가까운 예보 |
 | 자외선지수 | 기상청 UV API의 시간별 `h*` 값 중 현재 시각 이하의 가장 최근 값 |
 
+## 데이터 영속성
+
+Kafka 토픽 로그·KRaft 메타데이터·컨슈머 오프셋은 명명 볼륨 `kafka_data`에 저장됩니다. 이미지 기본값은 컨테이너 쓰기 레이어(`/tmp/kafka-logs`)라 컨테이너를 재생성하면 토픽과 오프셋이 사라집니다.
+
+```bash
+docker compose down          # 볼륨은 유지된다 (-v를 붙이면 삭제)
+docker compose up -d kafka
+docker exec pj-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server kafka:9092 --group weather-alert-group --describe
+```
+
+재생성 후에도 `CURRENT-OFFSET`이 유지되면 정상입니다. 컨슈머는 `auto_offset_reset=earliest`라 죽어 있던 동안 쌓인 메시지를 건너뛰지 않고, 중복은 등급 시그니처 쿨다운과 `event_id` upsert가 흡수합니다. 보존기간은 72시간입니다.
+
 ## 시간대
 
 모든 시각은 코드에서 **KST를 명시**해 만듭니다(`producer/timeutil.py`, `consumer/timeutil.py`). 컨테이너 `TZ` 설정에 의존하지 않습니다.
