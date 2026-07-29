@@ -6,7 +6,11 @@
 그 상태를 "수집 성공"으로 부르지 않기 위한 최소 계약이다.
 """
 
-from typing import Dict
+from datetime import datetime
+from typing import Dict, Optional
+from zoneinfo import ZoneInfo
+
+KST = ZoneInfo("Asia/Seoul")
 
 # 알림 판정에 실제로 쓰이는 수치 지수
 NUMERIC_INDEX_KEYS = (
@@ -53,3 +57,21 @@ def missing_index_keys(data: Dict) -> list:
     if data.get("other_special_notice") in UNKNOWN_NOTICE_VALUES:
         missing.append("other_special_notice")
     return missing
+
+
+def build_event_id(region: str, run_dt: Optional[datetime] = None) -> str:
+    """이벤트를 식별하는 결정적 키.
+
+    벽시계가 아니라 **예정된 실행 시각**에서 만든다. `datetime.now()`로 만들면
+    DAG가 재시도할 때마다 값이 달라져 중복 발행·중복 색인을 막지 못한다.
+    같은 스케줄 슬롯의 재시도는 같은 id를 갖고, 하류는 이 값으로 upsert 한다.
+
+    이 파이프라인은 시간당 1건을 발행하므로 지역 + KST 기준 시각(시 단위)이면
+    충분하다. 분 단위로 내리면 재시도 간 값이 갈린다.
+    """
+    if run_dt is None:
+        run_dt = datetime.now(KST)
+    if run_dt.tzinfo is None:
+        # naive 입력은 KST로 본다. 이 프로젝트의 모든 스케줄 기준은 KST다.
+        run_dt = run_dt.replace(tzinfo=KST)
+    return f"{region}:{run_dt.astimezone(KST).strftime('%Y%m%d%H')}"
