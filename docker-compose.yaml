@@ -127,7 +127,9 @@ services:
       AIRFLOW__API__MAXIMUM_PAGE_LIMIT: 100
       
       # 추가 패키지 설치
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests kafka-python opensearch-py python-dotenv"
+      # 버전 미고정이면 컨테이너 기동마다 최신을 설치해 재현성이 깨진다.
+      # requirements-consumer.txt와 같은 버전으로 고정하고 함께 올린다.
+      _PIP_ADDITIONAL_REQUIREMENTS: "requests==2.34.2 kafka-python==3.0.9 opensearch-py==3.2.0 python-dotenv==1.2.2"
       
       # 외부 서비스 주소 (컨테이너 내부에서 접근)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -331,7 +333,8 @@ services:
   # Kafka UI: Kafka 모니터링 (선택사항)
   # ============================================================================
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    # latest는 어느 날 다른 이미지가 된다. 마지막 릴리스 태그로 고정.
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: pj-kafka-ui
     
     # 포트 매핑

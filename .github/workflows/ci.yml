@@ -25,10 +25,10 @@ jobs:
         run: python -m compileall producer consumer dags scripts
 
       - name: Install test deps
-        # 패키지 import 스모크 테스트가 실제 런타임 의존성을 필요로 한다.
-        # compileall은 문법만 보므로 __init__.py가 없는 이름을 export 해도
-        # 잡지 못한다(실제로 DAG가 깨진 적이 있다).
-        run: pip install pytest pytest-cov requests python-dotenv kafka-python opensearch-py
+        # 런타임 의존성은 consumer 이미지와 같은 핀 파일에서 설치한다.
+        # 인라인 목록이면 핀 파일이 CI에서 한 번도 해석되지 않아, 존재하지
+        # 않는 버전이나 충돌이 머지 뒤에야 드러난다.
+        run: pip install -r requirements-consumer.txt pytest pytest-cov
 
       # 단위 테스트 + 커버리지 게이트.
       # 바닥값 50%는 현재 실측(53%) 바로 아래다 — 목표가 아니라 후퇴 방지선.

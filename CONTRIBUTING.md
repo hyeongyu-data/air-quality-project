@@ -106,6 +106,19 @@ docker compose exec airflow python -m py_compile /opt/airflow/dags/air_pipeline.
 - 로그·스크린샷·PR 설명에 비밀정보를 넣지 않는다.
 - 새 의존성은 출처와 필요성을 확인하고 최소한으로 추가한다.
 
+## 버전 정합성 원칙
+
+선언과 실행이 어긋나면 재현성이 깨진다. 버전이 사는 곳은 네 군데이고, 올릴 때는 짝을 함께 올린다.
+
+| 선언 | 실행 주체 | 짝 |
+| --- | --- | --- |
+| `requirements-consumer.txt` | Consumer 이미지 빌드 · CI 테스트 | compose의 `_PIP_ADDITIONAL_REQUIREMENTS`와 동일 버전 유지 |
+| compose `_PIP_ADDITIONAL_REQUIREMENTS` | Airflow 컨테이너 기동 시 설치 | 위와 동일 버전 |
+| `requirements.txt`의 airflow 핀 | 없음(IDE/참조용) | compose의 `apache/airflow` 이미지 태그 |
+| compose 이미지 태그 | 각 컨테이너 | `latest` 금지 — 검증된 태그로 고정 |
+
+갱신 절차: 핀 수정 → `pip install -r requirements-consumer.txt`로 해석 확인(CI가 자동 수행) → `docker compose up -d --build` 기동 확인 → 짝 파일 동기화 여부를 PR 셀프 리뷰에서 확인.
+
 ## Dependabot PR 처리 기준
 
 Dependabot이 주간으로 올리는 갱신 PR은 **7일 내에 판단**한다. 머지하거나, 보류 사유를 PR 코멘트로 남긴다. 방치는 문서("주간 점검한다")를 거짓말로 만든다.

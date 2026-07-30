@@ -2,4 +2,6 @@ kafka-python==3.0.9
 requests==2.34.2
 opensearch-py==3.2.0
 python-dotenv==1.2.2
-apache-airflow==2.7.3
+# Airflow는 pip가 아니라 compose 이미지(apache/airflow:2.10.0)로 실행된다.
+# 이 핀은 로컬 IDE/타입체크 참조용이며, 이미지 태그와 함께 올린다.
+apache-airflow==2.10.0
