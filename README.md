@@ -6,7 +6,7 @@
 
 - 진단·결함 인벤토리·개선 순서 한눈에 보기: [docs/dashboard.html](docs/dashboard.html)
 - 운영 리스크와 개선 방안(코드 근거 포함): [docs/operational-risks.md](docs/operational-risks.md)
-- 아키텍처 결정 기록: [docs/adr/](docs/adr/)
+- 아키텍처 결정 기록: [docs/adr/](docs/adr/) — 메달리언 제거(0001) · 왜 Kafka인가(0002) · 왜 OpenSearch인가(0003) · 왜 규칙 엔진인가(0004) · AWS 이전 경로(0005)
 
 ## 기여 / 협업 프로세스
 
@@ -363,16 +363,4 @@ docker compose exec airflow airflow users reset-password --username airflow --pa
 
 ## AWS 이전 방향
 
-로컬 Docker 구성을 AWS로 옮길 때는 다음 흐름이 가장 자연스럽습니다.
-
-```mermaid
-flowchart LR
-    A["EventBridge Scheduler<br/>매시간"] --> B["Lambda<br/>기상 데이터 수집/규칙 판정"]
-    B --> C["Kinesis Data Firehose"]
-    C --> D["S3 Raw/Processed"]
-    C --> E["OpenSearch"]
-    D --> F["Glue Crawler/Data Catalog"]
-    B --> G["SES 또는 Kakao API"]
-```
-
-Airflow가 꼭 필요하지 않다면 EventBridge Scheduler + Lambda로 단순화할 수 있습니다. DAG가 더 복잡해질 예정이면 MWAA 또는 ECS/Fargate에서 Airflow를 운영하는 방식이 맞습니다.
+현재 구성이 로컬 Docker인 것은 **검증 가능성의 선택**입니다 — 이 저장소의 모든 코드는 `docker compose up`으로 재현·검증 가능해야 한다는 원칙을 지킵니다. AWS 이전의 구체적 형태(EventBridge + Lambda + SQS + DynamoDB), 구성 요소별 대응 근거, 이전 시 밟아야 하는 지뢰(타임존·멱등성·IaC)와 실행 트리거는 [ADR-0005](docs/adr/0005-aws-migration-path.md)에 기록돼 있습니다.
