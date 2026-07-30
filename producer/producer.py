@@ -55,7 +55,7 @@ class KafkaWeatherProducer:
     def __init__(
         self,
         bootstrap_servers: str = None,
-        topic_current_weather: str = "seoul-weather"
+        topic_current_weather: str = None
     ):
         """
         Kafka 프로듀서 초기화
@@ -67,7 +67,10 @@ class KafkaWeatherProducer:
         self.bootstrap_servers = bootstrap_servers or os.getenv(
             "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
         )
-        self.topic_current_weather = topic_current_weather
+        # 컨슈머와 같은 환경변수를 읽는다 — 토픽명 단일 출처
+        self.topic_current_weather = topic_current_weather or os.getenv(
+            "KAFKA_TOPIC", "seoul-weather"
+        )
         
         try:
             self.producer = KafkaProducer(

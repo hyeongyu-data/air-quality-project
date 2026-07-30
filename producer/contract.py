@@ -14,6 +14,9 @@ try:
 except ImportError:  # 직접 실행 / pythonpath 경유
     from timeutil import now_kst, to_kst
 
+# 메시지 스키마 버전. consumer/schema.py의 상수와 짝이다 — 함께 올린다.
+SCHEMA_VERSION = 1
+
 # 알림 판정에 실제로 쓰이는 수치 지수
 NUMERIC_INDEX_KEYS = (
     "oak_pollen",

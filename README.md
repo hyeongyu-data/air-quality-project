@@ -259,6 +259,20 @@ docker exec pj-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 - 기상청 API의 발표시각(`base_time`)도 KST aware로 변환해 비교합니다.
 - 두 `timeutil.py`는 같은 내용입니다. Consumer 이미지는 `consumer/`만 포함하므로 producer 쪽을 import 할 수 없습니다. 한쪽을 고치면 다른 쪽도 함께 고칩니다.
 
+## 전달 보장
+
+오프셋은 **처리(판정·저장·발송 시도)가 끝난 뒤에만 커밋**합니다(at-least-once). 자동 커밋은 처리 실패 메시지를 조용히 유실했습니다. 재처리로 생기는 중복은 `event_id` upsert와 등급 시그니처 쿨다운이 흡수합니다.
+
+처리할 수 없는 메시지(깨진 JSON, 지원하지 않는 `schema_version`, 필수 키 누락, 처리 예외)는 **DLQ 토픽**(`KAFKA_DLQ_TOPIC`, 기본 `seoul-weather-dlq`)으로 격리한 뒤 오프셋을 전진시킵니다 — poison pill이 소비를 막지 않습니다. DLQ 발행조차 실패하면 커밋을 보류해 배치를 재처리합니다.
+
+```bash
+# 격리된 메시지와 사유 확인
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:9092 --topic seoul-weather-dlq --from-beginning
+```
+
+메시지 계약은 `producer/contract.py`(발신)와 `consumer/schema.py`(수신)의 `SCHEMA_VERSION`으로 잇습니다. 두 상수가 같은지 테스트가 고정하며, 토픽명은 양쪽이 같은 환경변수(`KAFKA_TOPIC`)를 읽습니다.
+
 ## 멱등성
 
 각 수집 이벤트에는 **예정된 실행 시각 기준**의 결정적 키 `event_id`가 붙습니다(`지역:YYYYMMDDHH`, KST). 벽시계가 아니라 스케줄 슬롯에서 만들기 때문에 태스크가 재시도돼도 값이 같습니다.
