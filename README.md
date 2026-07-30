@@ -62,7 +62,9 @@ Airflow는 데이터를 수집해 Kafka에 발행합니다. Consumer는 Kafka �
 .
 ├── docker-compose.yaml              # 로컬 실행 환경
 ├── dags/air_pipeline.py             # Airflow DAG, 데이터 수집 및 Kafka 발행
-├── producer/producer.py             # 기상청/에어코리아 API 수집 및 Kafka 발행
+├── producer/producer.py             # Kafka 발행 + 통합 수집기 (클라이언트 재수출)
+├── producer/api_common.py           # 공공데이터포털 공통 파싱 유틸
+├── producer/clients/                # API 클라이언트 (기상청 지수·에어코리아·단기예보)
 ├── consumer/rules.py                # 지수별 등급/행동 권고 규칙
 ├── consumer/consumer.py             # Kafka 소비, 규칙 적용, OpenSearch 저장
 ├── consumer/alert.py                # 콘솔/Slack/이메일/카카오/OpenSearch 알림
