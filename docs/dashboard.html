@@ -1,4 +1,4 @@
-<title>서울 기상 알림 시스템 — 진단 대시보드</title>
+<title>서울 기상 알림 시스템 — 프로젝트 소개</title>
 
 <style>
 :root{
@@ -11,32 +11,18 @@
   --line:#D6DEDC;
   --accent:#0E6B74;
   --accent-soft:#0E6B741A;
-
-  --g-good:#2E7D5B;
-  --g-normal:#9C7415;
-  --g-bad:#BE5D25;
-  --g-verybad:#AE3229;
-
+  --good:#2E7D5B;
+  --warn:#9C7415;
   --shadow:0 1px 2px rgba(17,24,25,.05), 0 8px 24px -16px rgba(17,24,25,.25);
-
   --f-sans:"Pretendard","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,-apple-system,sans-serif;
   --f-mono:ui-monospace,"SF Mono",Menlo,Consolas,"D2Coding",monospace;
 }
 @media (prefers-color-scheme:dark){
   :root{
-    --ground:#0D1314;
-    --panel:#151E1F;
-    --panel-2:#1D2829;
-    --ink:#E3EAE9;
-    --ink-2:#AFBEBD;
-    --ink-3:#7E8F8F;
-    --line:#293536;
-    --accent:#4FB3BC;
-    --accent-soft:#4FB3BC1F;
-    --g-good:#57B189;
-    --g-normal:#CBA23F;
-    --g-bad:#DF8A50;
-    --g-verybad:#DC6259;
+    --ground:#0D1314; --panel:#151E1F; --panel-2:#1D2829;
+    --ink:#E3EAE9; --ink-2:#AFBEBD; --ink-3:#7E8F8F; --line:#293536;
+    --accent:#4FB3BC; --accent-soft:#4FB3BC1F;
+    --good:#57B189; --warn:#CBA23F;
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
   }
 }
@@ -44,14 +30,14 @@
   --ground:#0D1314; --panel:#151E1F; --panel-2:#1D2829;
   --ink:#E3EAE9; --ink-2:#AFBEBD; --ink-3:#7E8F8F; --line:#293536;
   --accent:#4FB3BC; --accent-soft:#4FB3BC1F;
-  --g-good:#57B189; --g-normal:#CBA23F; --g-bad:#DF8A50; --g-verybad:#DC6259;
+  --good:#57B189; --warn:#CBA23F;
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
 }
 :root[data-theme="light"]{
   --ground:#F5F7F6; --panel:#FFFFFF; --panel-2:#EDF1F0;
   --ink:#111819; --ink-2:#3D4B4D; --ink-3:#68797B; --line:#D6DEDC;
   --accent:#0E6B74; --accent-soft:#0E6B741A;
-  --g-good:#2E7D5B; --g-normal:#9C7415; --g-bad:#BE5D25; --g-verybad:#AE3229;
+  --good:#2E7D5B; --warn:#9C7415;
   --shadow:0 1px 2px rgba(17,24,25,.05), 0 8px 24px -16px rgba(17,24,25,.25);
 }
 
@@ -63,11 +49,10 @@ body{
 }
 .wrap{max-width:1120px; margin:0 auto; padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px) 96px}
 
-/* ---------- type ---------- */
 h1,h2,h3{text-wrap:balance; margin:0; letter-spacing:-.02em; font-weight:700}
 h1{font-size:clamp(26px,4.2vw,40px); line-height:1.2}
 h2{font-size:clamp(18px,2.4vw,23px); line-height:1.3}
-h3{font-size:16px; line-height:1.4}
+h3{font-size:15.5px; line-height:1.4}
 p{margin:0}
 a{color:var(--accent); text-decoration:none; border-bottom:1px solid transparent}
 a:hover{border-bottom-color:currentColor}
@@ -76,155 +61,113 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radi
   font-family:var(--f-mono); font-size:11px; letter-spacing:.14em;
   text-transform:uppercase; color:var(--ink-3); font-weight:600;
 }
-.lede{color:var(--ink-2); max-width:66ch}
+.lede{color:var(--ink-2); max-width:68ch}
 .num{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+code{
+  font-family:var(--f-mono); font-size:.86em; background:var(--panel-2);
+  padding:1px 5px; border-radius:4px;
+}
+pre{
+  margin:0; background:var(--panel-2); border:1px solid var(--line);
+  border-radius:8px; padding:14px 16px; overflow-x:auto;
+  font-family:var(--f-mono); font-size:12.5px; line-height:1.6; color:var(--ink-2);
+}
+pre b{color:var(--ink); font-weight:600}
 
-/* ---------- header ---------- */
 .masthead{
   display:flex; flex-direction:column; gap:14px;
-  padding-bottom:28px; margin-bottom:36px; border-bottom:2px solid var(--ink);
+  padding-bottom:28px; margin-bottom:8px; border-bottom:2px solid var(--ink);
 }
 .masthead .meta{
   display:flex; flex-wrap:wrap; gap:8px 22px;
   font-family:var(--f-mono); font-size:11.5px; color:var(--ink-3);
   letter-spacing:.06em; text-transform:uppercase;
 }
-
-/* ---------- sections ---------- */
-section{margin-top:56px}
+section{margin-top:52px}
 .sec-head{
   display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
   padding-bottom:10px; margin-bottom:22px; border-bottom:1px solid var(--line);
 }
 .sec-head p{color:var(--ink-3); font-size:13.5px}
 
-/* ---------- verdict cards ---------- */
-.verdicts{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(248px,1fr))}
+/* ---------- stat tiles ---------- */
+.stats{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.stat{
+  background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:16px 18px; box-shadow:var(--shadow);
+  display:flex; flex-direction:column; gap:5px;
+}
+.stat .who{font-size:12.5px; color:var(--ink-3)}
+.stat b{font-family:var(--f-mono); font-size:30px; line-height:1.1; letter-spacing:-.03em}
+.stat .note{font-size:12px; color:var(--ink-3)}
+.stat .delta{color:var(--good); font-family:var(--f-mono); font-size:12px}
+
+/* ---------- pipeline flow ---------- */
+.flow-scroll{overflow-x:auto; padding:4px}
+.flow{display:flex; align-items:stretch; gap:0; min-width:720px}
+.stage{
+  flex:1; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+  padding:14px 16px; box-shadow:var(--shadow);
+  display:flex; flex-direction:column; gap:6px; min-width:150px;
+}
+.stage .tag{
+  font-family:var(--f-mono); font-size:10.5px; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--accent); font-weight:700;
+}
+.stage b{font-size:14.5px}
+.stage p{font-size:12.5px; color:var(--ink-2)}
+.stage small{font-family:var(--f-mono); font-size:11px; color:var(--ink-3)}
+.arrow{
+  align-self:center; padding:0 8px; color:var(--ink-3);
+  font-family:var(--f-mono); font-size:18px; flex:0 0 auto;
+}
+.fanout{
+  display:grid; gap:10px; margin-top:14px;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+}
+.sink{
+  background:var(--panel-2); border:1px solid var(--line); border-radius:8px;
+  padding:10px 13px; font-size:13px;
+}
+.sink b{display:block; font-size:13px}
+.sink span{font-size:12px; color:var(--ink-3)}
+
+/* ---------- cards ---------- */
+.grid2{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.grid3{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
 .card{
   background:var(--panel); border:1px solid var(--line); border-radius:10px;
-  padding:20px 20px 18px; box-shadow:var(--shadow);
-  display:flex; flex-direction:column; gap:10px;
+  padding:18px 20px; box-shadow:var(--shadow);
+  display:flex; flex-direction:column; gap:8px;
 }
-.card .who{font-size:12.5px; color:var(--ink-3)}
-.score{display:flex; align-items:baseline; gap:7px}
-.score b{font-family:var(--f-mono); font-size:38px; font-weight:700; line-height:1; letter-spacing:-.03em}
-.score span{font-family:var(--f-mono); font-size:13px; color:var(--ink-3)}
-.meter{height:5px; border-radius:3px; background:var(--panel-2); overflow:hidden}
-.meter i{display:block; height:100%; border-radius:3px}
 .card .note{font-size:13px; color:var(--ink-2)}
-
-/* ---------- grade chips (프로젝트가 쓰는 4단 등급 체계를 그대로 심각도에 적용) ---------- */
-.chip{
-  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
-  font-family:var(--f-mono); font-size:11px; font-weight:700;
-  letter-spacing:.06em; padding:3px 8px; border-radius:4px;
-  border:1px solid currentColor;
-}
-.chip::before{content:""; width:6px; height:6px; border-radius:50%; background:currentColor}
-.g0{color:var(--g-verybad)}
-.g1{color:var(--g-bad)}
-.g2{color:var(--g-normal)}
-.g3{color:var(--g-good)}
-.chip.solid{border-color:transparent; background:var(--accent-soft); color:var(--accent)}
-
-/* ---------- severity ledger ---------- */
-.ledger{display:flex; flex-direction:column; gap:26px}
-.band{
-  background:var(--panel); border:1px solid var(--line); border-radius:10px;
-  overflow:hidden; box-shadow:var(--shadow);
-}
-.band>header{
-  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
-  padding:13px 18px; background:var(--panel-2); border-bottom:1px solid var(--line);
-}
-.band>header h3{flex:1 1 auto; min-width:180px}
-.band>header .count{font-family:var(--f-mono); font-size:12.5px; color:var(--ink-3)}
-.rows{display:flex; flex-direction:column}
-.row{
-  display:grid; gap:4px 16px; padding:14px 18px 14px 16px;
-  grid-template-columns:64px minmax(0,1fr) 140px;
-  border-top:1px solid var(--line); border-left:3px solid transparent;
-}
-.rows .row:first-child{border-top:none}
-.row .id{font-family:var(--f-mono); font-size:13px; color:var(--ink-3); padding-top:1px}
-.row .what{min-width:0}
-.row .what b{font-weight:600; display:block; letter-spacing:-.005em}
-.row .what em{
-  font-style:normal; display:block; margin-top:3px;
-  font-size:13px; color:var(--ink-2);
-}
-.row .where{
-  font-family:var(--f-mono); font-size:11.5px; color:var(--ink-3);
-  align-self:start; padding-top:2px; word-break:break-all;
-}
-.row.s0{border-left-color:var(--g-verybad)}
-.row.s1{border-left-color:var(--g-bad)}
-.row.s2{border-left-color:var(--g-normal)}
-.row.s3{border-left-color:var(--g-good)}
-.row.done{border-left-color:var(--g-good); background:color-mix(in srgb, var(--g-good) 6%, transparent)}
-.row.done .what b{text-decoration:line-through; text-decoration-color:var(--ink-3); opacity:.75}
-.row .fixed{
-  display:inline-block; margin-left:8px; vertical-align:middle;
-  font-family:var(--f-mono); font-size:10px; font-weight:700; letter-spacing:.06em;
-  color:var(--g-good); border:1px solid currentColor; border-radius:3px; padding:1px 5px;
-  text-decoration:none; opacity:1;
-}
-@media (max-width:660px){
-  .row{grid-template-columns:56px minmax(0,1fr)}
-  .row .where{grid-column:2; padding-top:0}
+.card .src{font-family:var(--f-mono); font-size:11px; color:var(--ink-3); margin-top:auto; padding-top:6px}
+.pill{
+  display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  font-family:var(--f-mono); font-size:10.5px; font-weight:700; letter-spacing:.06em;
+  padding:2px 8px; border-radius:4px; border:1px solid currentColor; color:var(--accent);
 }
 
-/* ---------- domain matrix ---------- */
+/* ---------- checklist ---------- */
+.checks{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px}
+.checks li{
+  display:grid; grid-template-columns:20px minmax(0,1fr); gap:10px;
+  font-size:14px; color:var(--ink-2);
+}
+.checks li::before{content:"✔"; color:var(--good); font-weight:700; line-height:1.5}
+.checks li.todo::before{content:"○"; color:var(--warn)}
+.checks b{color:var(--ink); font-weight:600}
+.checks .how{display:block; font-size:12.5px; color:var(--ink-3)}
+
+/* ---------- table ---------- */
 .scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--panel); box-shadow:var(--shadow)}
 table{border-collapse:collapse; width:100%; min-width:560px; font-size:14px}
-th,td{padding:11px 16px; text-align:left; border-bottom:1px solid var(--line)}
+th,td{padding:11px 16px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
 thead th{
   font-family:var(--f-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--ink-3); background:var(--panel-2); font-weight:600; white-space:nowrap;
 }
 tbody tr:last-child td{border-bottom:none}
-td.n{font-family:var(--f-mono); font-variant-numeric:tabular-nums; text-align:center; width:1%}
-td.n b{font-size:15px}
-td.zero{color:var(--ink-3)}
-
-/* ---------- roadmap (순서가 의미를 갖는 유일한 구간 — 의존 순서) ---------- */
-.steps{display:flex; flex-direction:column; gap:0; counter-reset:step}
-.step{
-  display:grid; grid-template-columns:auto minmax(0,1fr); gap:0 18px;
-  padding-bottom:26px; position:relative;
-}
-.step:last-child{padding-bottom:0}
-.step .dot{
-  counter-increment:step; grid-row:1/3;
-  width:30px; height:30px; border-radius:50%;
-  border:1.5px solid var(--accent); color:var(--accent); background:var(--ground);
-  display:grid; place-items:center; z-index:1;
-  font-family:var(--f-mono); font-size:12.5px; font-weight:700;
-}
-.step .dot::before{content:counter(step,decimal-leading-zero)}
-.step:not(:last-child)::before{
-  content:""; position:absolute; left:15px; top:30px; bottom:0;
-  width:1px; background:var(--line);
-}
-.step h3{padding-top:4px}
-.step .body{color:var(--ink-2); font-size:14px; margin-top:6px}
-.step .body ul{margin:6px 0 0; padding-left:18px}
-.step .body li{margin-top:3px}
-
-/* ---------- arch compare ---------- */
-.split{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-.stack{list-style:none; margin:10px 0 0; padding:0; display:flex; flex-direction:column; gap:7px}
-.stack li{
-  display:flex; align-items:baseline; gap:9px;
-  font-size:14px; padding:7px 11px; border-radius:6px; background:var(--panel-2);
-}
-.stack li .tag{font-family:var(--f-mono); font-size:10.5px; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase}
-.stack li.gone{text-decoration:line-through; color:var(--ink-3); text-decoration-color:var(--g-verybad)}
-
-/* ---------- progress ---------- */
-.tally{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(160px,1fr))}
-.tally .card{gap:6px; padding:16px 18px}
-.tally b{font-family:var(--f-mono); font-size:30px; line-height:1; letter-spacing:-.03em}
 
 .callout{
   border-left:3px solid var(--accent); background:var(--accent-soft);
@@ -236,292 +179,180 @@ footer{
   margin-top:72px; padding-top:22px; border-top:1px solid var(--line);
   color:var(--ink-3); font-size:12.5px; display:flex; flex-direction:column; gap:6px;
 }
+@media (max-width:660px){ .arrow{padding:0 4px} }
 </style>
 
 <div class="wrap">
 
   <header class="masthead">
-    <p class="eyebrow">air-quality-project — 진단 리포트</p>
-    <h1>돌아가는 파이프라인, 그러나 실패를 실패로 부르지 않는 파이프라인</h1>
-    <p class="lede">서울 기상·대기질 알림 시스템을 네 개의 관점(데이터 엔지니어링·플랫폼 아키텍처·운영/SRE·채용)에서 독립 검토한 결과입니다. 해피 패스는 완성돼 있지만 실패를 인지하는 경로가 대부분 끊겨 있습니다. 아래는 그 근거와, 무엇을 어떤 순서로 고칠지에 대한 기록입니다.</p>
+    <p class="eyebrow">air-quality-project · 데이터 엔지니어링 포트폴리오</p>
+    <h1>서울 기상 알림 시스템</h1>
+    <p class="lede">기상청·에어코리아 공공 API에서 9개 기상·대기질 지수를 하루 네 번 수집해, 공인 임계값 기준으로 등급을 판정하고 행동 권고를 만들어 카카오톡·이메일·Slack으로 보내는 이벤트 파이프라인입니다. 전 구성이 <b>로컬 Docker Compose로 재현·검증 가능</b>하며, 실패 경로(수집 실패·발송 실패·저장소 장애·재시작)를 설계의 1급 시민으로 다룹니다.</p>
     <div class="meta">
-      <span>진단일 2026-07-29</span>
-      <span>검토 대상 5,077 LOC</span>
-      <span>등록 이슈 37건 · 해결 25건 · P0 0건</span>
+      <span>Python · Airflow · Kafka · OpenSearch</span>
+      <span>Docker Compose 완결</span>
       <span><a href="https://github.com/hyeongyu-data/air-quality-project">github.com/hyeongyu-data/air-quality-project</a></span>
     </div>
   </header>
 
   <section>
-    <div class="sec-head">
-      <h2>판정</h2>
-      <p>네 개 관점의 독립 평가</p>
+    <div class="stats">
+      <div class="stat"><span class="who">회귀 테스트</span><b class="num">143</b><span class="delta">18 → 143</span></div>
+      <div class="stat"><span class="who">머지된 PR</span><b class="num">37</b><span class="note">전건 CI 게이트 통과</span></div>
+      <div class="stat"><span class="who">이슈</span><b class="num">37</b><span class="note">해결 26 · 진행 11</span></div>
+      <div class="stat"><span class="who">아키텍처 결정 기록</span><b class="num">5</b><span class="note">전부 재검토 조건 포함</span></div>
+      <div class="stat"><span class="who">애플리케이션 코드</span><b class="num">4.4k</b><span class="note">LOC (테스트 제외)</span></div>
     </div>
-    <div class="verdicts">
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>파이프라인</h2>
+      <p>KST 00 · 06 · 12 · 18시 — 판정 분기가 정의된 시각과 cron이 테스트로 묶여 있습니다</p>
+    </div>
+    <div class="flow-scroll">
+      <div class="flow">
+        <div class="stage">
+          <span class="tag">수집 · 발행</span>
+          <b>Airflow DAG</b>
+          <p>공공 API 3계열 수집 → 계약 검증(수집 0건이면 태스크 실패) → 멱등 발행</p>
+          <small>schedule 0 */6 * * *</small>
+        </div>
+        <span class="arrow">→</span>
+        <div class="stage">
+          <span class="tag">버퍼 · 재생</span>
+          <b>Kafka</b>
+          <p>seoul-weather 토픽. 영속 볼륨 + 보존 72h — Consumer가 하루 죽어도 백로그 유지</p>
+          <small>enable_idempotence · earliest</small>
+        </div>
+        <span class="arrow">→</span>
+        <div class="stage">
+          <span class="tag">판정 · 발송</span>
+          <b>Consumer</b>
+          <p>공인 임계값 규칙 엔진 → 행동 권고. 등급 변화 시에만 발송(쿨다운) + 12h 무발송 시 재발송</p>
+          <small>graceful shutdown · 하트비트 healthcheck</small>
+        </div>
+      </div>
+    </div>
+    <div class="fanout">
+      <div class="sink"><b>OpenSearch</b><span>판정 이력 (event_id upsert) · 쿨다운 상태 문서</span></div>
+      <div class="sink"><b>카카오톡</b><span>나에게 보내기 · refresh token 자동 회전</span></div>
+      <div class="sink"><b>이메일 / Slack</b><span>행동 권고 중심 본문</span></div>
+      <div class="sink"><b>콘솔</b><span>항상 출력 — 발송 억제와 무관한 감사 로그</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>알림은 이렇게 갑니다</h2>
+      <p>원본 수치가 아니라 판정과 행동 권고를 전달합니다 — 결측은 결측이라고 말합니다</p>
+    </div>
+    <div class="grid2">
+      <pre>[서울 오늘 아침 기상 알림] 06:00
+
+<b>행동</b>
+- 마스크 착용
+- 우산 준비
+
+<b>위험/주의</b>
+- 미세먼지 82㎍/㎥: 나쁨
+- 강수확률 70%: 나쁨
+
+<b>나머지</b>
+기온 최저 12℃, 최고 20℃
+황사 보통, 자외선 4, 특보 없음</pre>
+      <pre># 에어코리아 장애 시 — 0으로 채우지 않는다
+
+<b>상세 판정</b>
+- 미세먼지 PM10: 정보없음 / 판정할 수 없음
+- 강수확률 30%: 좋음 / 우산 없이 활동 가능
+- 자외선지수 6: 나쁨 / SPF50+ 필수
+
+<b>참고</b>
+- air_quality: 에어코리아 응답 없음
+
+# 핵심 지수 전량 결측 → 외부 발송 보류</pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>설계 하이라이트</h2>
+      <p>이 프로젝트가 공들인 지점 — 각 항목은 회귀 테스트로 고정돼 있습니다</p>
+    </div>
+    <div class="grid3">
       <div class="card">
-        <p class="who">데이터 엔지니어링 실무</p>
-        <div class="score"><b class="num">42</b><span>/ 100</span></div>
-        <div class="meter"><i style="width:42%;background:var(--g-bad)"></i></div>
-        <p class="note">공공 API 파싱의 완성도는 평균 이상. 다만 하루 24건에 Kafka·Airflow·OpenSearch를 얹었고, 정작 멱등성·품질검증·스키마·백필이 비어 있음.</p>
+        <span class="pill">데이터 품질</span>
+        <h3>결측은 0이 아니다</h3>
+        <p class="note">결측을 0으로 치환하면 "체감온도 0℃ → 동상 위험"이 한여름에 발송되고, 미세먼지 결측이 "외출 자유"가 됩니다. <code>UNKNOWN</code> 등급을 분리해 결측은 판정·발송에서 제외하고 "정보없음"으로 정직하게 표시합니다.</p>
+        <span class="src">rules.py · 판정 공통 경로 한 곳에서 9개 지수 커버</span>
       </div>
       <div class="card">
-        <p class="who">포트폴리오 / 서류 심사</p>
-        <div class="score"><b class="num">62</b><span>/ 100 · 보류</span></div>
-        <div class="meter"><i style="width:62%;background:var(--g-normal)"></i></div>
-        <p class="note">문서·협업 프로세스는 확실한 차별점. 그러나 실행 증거·수치·결정 근거가 전무해, 데이터 엔지니어링 본질 질문 10개 중 8개에서 막힘.</p>
+        <span class="pill">전달 보증</span>
+        <h3>실패를 성공으로 기록하지 않는다</h3>
+        <p class="note">발송이 전량 실패하면 쿨다운 시그니처를 기록하지 않아 다음 회차에 재시도합니다. 그러지 않으면 SMTP·토큰 만료 순간의 등급이 "알린 것"으로 굳어 알림이 영구 유실됩니다. 수집 실패·발행 0건은 DAG 태스크 실패로 올라가 Slack으로 통보됩니다.</p>
+        <span class="src">should_record_signature() · on_failure_callback</span>
       </div>
       <div class="card">
-        <p class="who">운영 성숙도 / SRE</p>
-        <div class="score"><b class="num">P0 0건</b><span>6건 → 0</span></div>
-        <div class="meter"><i style="width:55%;background:var(--g-normal)"></i></div>
-        <p class="note">실패를 실패로 부르고 상태를 잃지 않게 됐습니다. 여전히 측정값이 없고(관측성) Airflow는 SQLite 위에서 돕니다.</p>
+        <span class="pill">멱등성</span>
+        <h3>키는 벽시계가 아니라 스케줄 슬롯에서</h3>
+        <p class="note"><code>event_id = 지역:YYYYMMDDHH</code>를 실행 예정 시각에서 만들어 재시도에도 값이 같습니다. Kafka는 멱등 프로듀서, OpenSearch는 <code>_id</code> upsert — 같은 이벤트를 3번 재처리해도 문서는 1건입니다.</p>
+        <span class="src">contract.build_event_id() · 자정 경계 KST 변환 포함</span>
       </div>
       <div class="card">
-        <p class="who">메달리언 파이프라인 존폐</p>
-        <div class="score"><b class="num">삭제</b></div>
-        <div class="meter"><i style="width:100%;background:var(--g-verybad)"></i></div>
-        <p class="note">Bronze 이후 전 구간이 AWS 없이 검증 불가, IaC·테스트 0건, 본체와 데이터 연결 0. 게다가 <span class="num">profiles</span> 미지정으로 본체 데모마다 3개 컨테이너가 함께 기동됨.</p>
+        <span class="pill">상태 관리</span>
+        <h3>쿨다운 상태는 문서 GET으로</h3>
+        <p class="note">직전 등급·마지막 발송 시각을 지역별 상태 문서로 관리합니다. 문서 GET은 refresh와 무관하게 실시간이라 검색 기반의 지연 레이스가 구조적으로 없습니다. 등급이 같아도 12시간 무발송이면 재발송해 "조용함 = 정상"을 보증합니다.</p>
+        <span class="src">weather-cooldown-state · OpenSearch 장애 시 로컬 캐시 폴백</span>
+      </div>
+      <div class="card">
+        <span class="pill">시간대</span>
+        <h3>컨테이너 TZ에 의존하지 않는다</h3>
+        <p class="note">모든 시각을 코드에서 KST로 명시합니다(<code>now_kst()</code>). TZ=UTC 환경에서도 발표시각 역산·오늘 예보 필터·인덱스 날짜가 전부 같은 결과 — AWS Lambda(UTC 기본)로 옮겨도 조용히 틀어질 지점이 없습니다.</p>
+        <span class="src">timeutil.py · TZ 3종 매트릭스 테스트</span>
+      </div>
+      <div class="card">
+        <span class="pill">보안</span>
+        <h3>키는 로그에도 페이로드에도 없다</h3>
+        <p class="note">공공 API 키는 쿼리스트링이라 예외 문자열에 그대로 실립니다. 값이 만들어지는 지점에서 마스킹하고, 로깅 필터를 안전망으로 겹칩니다 — 로그뿐 아니라 Kafka 페이로드·이메일 본문으로 새는 경로까지 막습니다.</p>
+        <span class="src">masking.py · serviceKey=*** (키 이름은 남겨 원인 추적 가능)</span>
       </div>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
-      <h2>결함 인벤토리</h2>
-      <p>심각도는 이 프로젝트가 쓰는 4단 등급 체계를 그대로 적용했습니다</p>
-    </div>
-
-    <div class="ledger">
-
-      <div class="band">
-        <header>
-          <span class="chip g3">해결됨</span>
-          <h3>고치고 머지한 것 — <strong>P0 전량 해결</strong></h3>
-          <span class="count num">17건</span>
-        </header>
-        <div class="rows">
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/33">#33</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/58">PR #58</a>
-            <div class="what">
-              <b>결측값을 0으로 대체해 오알림이 발송된다</b>
-              <em>API가 죽으면 체감온도 결측 → 0 → "매우나쁨 · 동상 위험"이 한여름에 발송된다. 반대로 미세먼지 결측 → 0 → "좋음 · 외출 자유"라는 거짓 안전 신호가 나간다.</em>
-            </div>
-            <span class="where">consumer/consumer.py:76<br>consumer/rules.py:225</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/34">#34</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/59">PR #59</a>
-            <div class="what">
-              <b>발송이 실패해도 쿨다운 시그니처가 전진한다</b>
-              <em>SMTP·카카오·Slack이 전부 실패해도 "발송됨" 상태가 저장된다. 등급이 유지되는 동안 알림은 영영 오지 않고, 콘솔 채널이 항상 성공이라 지표로도 잡히지 않는다.</em>
-            </div>
-            <span class="where">consumer/alert.py:708,812<br>consumer/consumer.py:318</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/35">#35</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/60">PR #60</a>
-            <div class="what">
-              <b>수집·발행이 실패해도 DAG가 성공으로 끝난다</b>
-              <em>수집 실패는 예외 없이 반환되고, 발행 0건도 success다. <span class="num">email_on_failure</span>는 False이고 실패 콜백도 없어 통보 경로가 아예 없다. <span class="num">retries: 2</span>는 발동할 일이 없다.</em>
-            </div>
-            <span class="where">dags/air_pipeline.py:150,213,228</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/38">#38</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/61">PR #61</a>
-            <div class="what">
-              <b>API 키·토큰이 로그에 영구 기록된다</b>
-              <em>서비스 키가 쿼리스트링이라 연결 예외 문자열에 그대로 실려 나가고, 그 문자열이 로그로 출력된다. Airflow 로그 볼륨에는 만료 정책이 없다.</em>
-            </div>
-            <span class="where">producer/producer.py:510-516<br>scripts/kakao_get_refresh_token.py:126</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/50">#50</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/62">PR #62</a>
-            <div class="what"><b>카카오 신규 refresh token을 버린다</b>
-            <em>갱신 응답의 새 토큰을 로그만 남기고 폐기해, 기존 토큰 만료 시점에 카카오 알림이 영구 중단된다.</em></div>
-            <span class="where">consumer/alert.py:655-656</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/39">#39</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/65">PR #65</a>
-            <div class="what"><b>전 구간 naive datetime</b>
-            <em>오프셋 없는 ISO를 OpenSearch가 UTC로 읽어 이력이 9시간 밀린다. AWS(UTC 기본)로 옮기는 순간 오늘 예보 필터가 전량 비어 오탐으로 직결된다.</em></div>
-            <span class="where">producer/producer.py:1134<br>consumer/alert.py:692</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/41">#41</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/64">PR #64</a>
-            <div class="what"><b>멱등성 부재</b>
-            <em>발행·색인 어디에도 키가 없다. 재시도 = 중복 발행, 재처리 = 중복 문서. <span class="num">_id</span> 한 줄이면 해결되는 것도 안 돼 있다.</em></div>
-            <span class="where">producer/producer.py:1030<br>consumer/alert.py:712</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/44">#44</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/66">PR #66</a>
-            <div class="what"><b>황사가 상시 "좋음"인 죽은 지표</b>
-            <em>PM10을 프록시로 복사하는데 황사 GOOD 임계가 150이라 사실상 항상 좋음이다. pm10 수치는 전 측정소 평균인데 등급은 첫 측정소 것을 그대로 쓴다.</em></div>
-            <span class="where">producer/producer.py:666,696</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/45">#45</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/67">PR #67</a>
-            <div class="what"><b>죽은 코드 2차</b><em>도달 불가 분기(<span class="num">cold_risk</span>·<span class="num">discomfort</span>), 중복 발행 경로, 더미 데이터를 실 토픽에 쏘는 <span class="num">__main__</span> 4곳.</em></div>
-            <span class="where">rules.py · producer.py · consumer.py</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/55">#55</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/57">PR #57</a>
-            <div class="what"><b>진행 현황 대시보드</b><em>지금 보고 있는 이 문서. 저장소 안에 정적 파일로 완결된다.</em></div>
-            <span class="where">docs/dashboard.html</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/36">#36</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/69">PR #69</a>
-            <div class="what">
-              <b>Kafka에 영속 볼륨이 없다</b>
-              <em>토픽·오프셋이 컨테이너 쓰기 레이어에만 있다. 재생성하면 전멸하고, 컨슈머는 <span class="num">latest</span>로 재구독해 백로그를 조용히 스킵한다. "재처리 가능"이라는 Kafka 도입 명분이 실제로는 성립하지 않는다.</em>
-            </div>
-            <span class="where">docker-compose.yaml:19-83<br>consumer/consumer.py:208</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/37">#37</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/70">PR #70</a>
-            <div class="what">
-              <b>OpenSearch 미가용 시 쿨다운이 전면 무력화된다</b>
-              <em>연결 실패가 <span class="num">client=None</span>으로 고정되고 재연결이 없다. 그 사이 모든 메시지가 전 채널로 발송된다. healthcheck는 200만 확인해 red 클러스터도 healthy로 통과시킨다.</em>
-            </div>
-            <span class="where">consumer/consumer.py:63<br>docker-compose.yaml:270,281</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/76">PR #76</a>
-            <div class="what"><b>컨슈머가 1시간마다 자살한다</b>
-            <em>정상 종료와 크래시 루프가 로그상 구분되지 않는다. 재시작 시 연결 실패는 그 1시간 동안 고정된다.</em></div>
-            <span class="where">consumer/consumer.py:400-409</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/77">PR #77</a>
-            <div class="what"><b>쿨다운 상태를 이력 검색으로 읽는다</b>
-            <em>refresh 지연 레이스, <span class="num">match</span> 쿼리 오매칭, 무발송 상한 부재. 조용한 게 정상인지 고장인지 구분할 신호가 없다.</em></div>
-            <span class="where">consumer/alert.py:724-749</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/47">#47</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/78">PR #78</a>
-            <div class="what"><b>Airflow 메타DB가 볼륨 밖에 있다</b>
-            <em>컨테이너 재생성 시 실행 이력과 DAG on/off 상태가 전멸한다. 켜둔 DAG가 꺼진 채 돌아와 조용히 무알림이 된다.</em></div>
-            <span class="where">docker-compose.yaml:113,140</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/54">#54</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/75">PR #75</a>
-            <div class="what"><b>Dependabot PR 6건 방치</b><em>"주간 점검한다"고 문서에 써놓고 2주 넘게 방치. 프로세스를 강점으로 내세운 만큼 잃는 게 크다.</em></div>
-            <span class="where">PR #3 #5 #25 #26 #27 #29</span>
-          </div>
-          <div class="row done">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/52">#52</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/79">PR #79</a>
-            <div class="what"><b>기술 선택 근거(ADR)가 없다</b><em>메시지 키가 "서울" 고정이라 파티션 병렬성 0, 브로커 1대, 보존 24시간. Kafka의 세 가지 가치 중 어느 것도 쓰이지 않는데 이유가 어디에도 없다.</em></div>
-            <span class="where">docs/adr/ (신설)</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="band">
-        <header>
-          <span class="chip g1">나쁨 · P1</span>
-          <h3>데이터가 조용히 틀어지거나, 장애를 인지할 수 없다</h3>
-          <span class="count num">3건 남음</span>
-        </header>
-        <div class="rows">
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/43">#43</a></span>
-            <div class="what"><b>테스트가 rules.py 한 모듈뿐</b>
-            <em>커버리지가 낮은 게 아니라 테스트 가능하게 설계되지 않았다. 순수 함수인 <span class="num">send_all(send_external=False)</span>조차 미검증 — 쿨다운의 핵심 계약이다.</em></div>
-            <span class="where">tests/ · pytest.ini</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/48">#48</a></span>
-            <div class="what"><b>메시지 스키마 계약이 없다</b>
-            <em>계약이 코드에 흩어져 필드를 지워도 아무도 모른다. 폴 결과 중 첫 레코드만 처리하고 나머지를 버리는 코드도 남아 있다.</em></div>
-            <span class="where">consumer/consumer.py:234-238,295</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/49">#49</a></span>
-            <div class="what"><b>측정값이 없다</b>
-            <em>알림이 실제로 전달됐는지, 결측이 몇 건인지, 지연이 얼마인지 볼 방법이 없다. 로그는 전부 평문 f-string이다.</em></div>
-            <span class="where">전역</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="band">
-        <header>
-          <span class="chip g2">보통 · P2</span>
-          <h3>구조·재현성·프로세스 부채</h3>
-          <span class="count num">5건 남음</span>
-        </header>
-        <div class="rows">
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/46">#46</a></span>
-            <div class="what"><b>producer.py 3중 복붙</b><em>같은 유틸 5종이 세 클라이언트에 복사돼 있고 <span class="num">_safe_float</span>의 기본값만 서로 다르다. 그 차이가 #33의 온상이다.</em></div>
-            <span class="where">producer/producer.py:60,434,734</span>
-          </div>
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/22">#22</a></span>
-            <div class="what"><b>실행 환경 버전 정합성</b><em>requirements의 Airflow 2.7.3과 실제 이미지 2.10.0 불일치, 컨테이너 기동마다 런타임 pip install.</em></div>
-            <span class="where">requirements.txt · compose:124</span>
-          </div>
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/21">#21</a></span>
-            <div class="what"><b>자동 커밋 → at-most-once</b><em>처리 실패해도 오프셋이 전진해 메시지가 유실된다. DLQ도 재처리 경로도 없다.</em></div>
-            <span class="where">consumer/consumer.py:207</span>
-          </div>
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/20">#20</a></span>
-            <div class="what"><b>운영 보안 프로필 미분리</b><em>기본 계정 하드코딩, 빈 Fernet 키, OpenSearch 보안 플러그인 off, Kafka UI 동적 설정 허용.</em></div>
-            <span class="where">docker-compose.yaml:104,116,266,458</span>
-          </div>
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/23">#23</a></span>
-            <div class="what"><b>CI가 실질 검증을 하지 않는다</b><em>compile + pytest뿐. 의존성 설치·린트·비밀정보 스캔·이미지 빌드가 없다.</em></div>
-            <span class="where">.github/workflows/ci.yml</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="band">
-        <header>
-          <span class="chip solid">문서 · 서사</span>
-          <h3>코드는 있는데 근거가 없다</h3>
-          <span class="count num">3건 남음</span>
-        </header>
-        <div class="rows">
-          <div class="row s3">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/51">#51</a></span>
-            <div class="what"><b>README에 실행 증거도 수치도 없다</b><em>375줄 중 절반이 실행 명령어인데, 스크린샷 0장·측정값 0개. 이 시스템이 한 번이라도 돌았다는 증거가 없다.</em></div>
-            <span class="where">README.md</span>
-          </div>
-          <div class="row s3">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/53">#53</a></span>
-            <div class="what"><b>해결해 놓고 안 쓴 트러블슈팅 3건</b><em>UV 시간 오프셋 환산, 황사 권한 부재 폴백, 등급 시그니처 쿨다운. 이미 자산인데 FAQ 한 줄로만 남아 있다.</em></div>
-            <span class="where">docs/troubleshooting.md (신설)</span>
-          </div>
-          <div class="row s3">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/24">#24</a></span>
-            <div class="what"><b>운영 관측 대시보드 부재</b><em>런타임 상태를 한 화면에서 볼 수단이 없다. #49가 만들어낼 측정값이 선행 조건.</em></div>
-            <span class="where">신규</span>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <h2>영역별 분포</h2>
-      <p>결함이 어디에 몰려 있는가</p>
+      <h2>기술 선택 — 왜 이 스택인가</h2>
+      <p>규모 주장을 하지 않습니다. 과잉은 인정하고 근거와 재검토 조건을 기록합니다</p>
     </div>
     <div class="scroll">
       <table>
-        <thead>
-          <tr><th>영역</th><th>해결</th><th>남음</th><th>한 줄 진단</th></tr>
-        </thead>
+        <thead><tr><th>선택</th><th>정직한 전제</th><th>실제 근거</th><th>재검토 조건</th></tr></thead>
         <tbody>
-          <tr><td>데이터 품질</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n"><b>1</b></td><td>결측·시간대·죽은 지표를 정리했다. 파싱 계약 테스트가 남았다.</td></tr>
-          <tr><td>전달 보증</td><td class="n" style="color:var(--g-good)"><b>5</b></td><td class="n"><b>2</b></td><td>쿨다운 레이스와 무발송 간격까지 닫았다. 오프셋 수동 커밋·DLQ가 남았다.</td></tr>
-          <tr><td>상태 영속성</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n">0</td><td>Kafka·OpenSearch·Airflow 메타DB 전부 실측 검증으로 완료.</td></tr>
-          <tr><td>보안</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n"><b>2</b></td><td>키가 새던 경로를 막았다. 운영 프로필과 CI 스캐닝이 남았다.</td></tr>
-          <tr><td>관측성</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n"><b>2</b></td><td>컨슈머 생존이 healthcheck에 잡힌다. 측정값과 대시보드가 남았다.</td></tr>
-          <tr><td>구조 · 재현성</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n"><b>2</b></td><td>죽은 코드와 방치된 갱신 PR을 정리했다. 의존성 정합성·producer 분해가 남았다.</td></tr>
-          <tr><td>문서 · 서사</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n"><b>2</b></td><td>ADR 5편으로 결정의 근거를 남겼다. README 재구성·트러블슈팅이 남았다.</td></tr>
+          <tr>
+            <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0002-why-kafka.md"><b>Kafka</b></a></td>
+            <td>하루 4건 — 규모로는 정당화되지 않는다</td>
+            <td>수집과 발송의 장애 격리, 백로그 재생, 컨슈머 그룹·오프셋·멱등 프로듀서를 운영 문제로 학습</td>
+            <td>실배포 시 SQS 교체</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0003-why-opensearch.md"><b>OpenSearch</b></a></td>
+            <td>연 1,460건에 검색 엔진은 과하다</td>
+            <td>이력 탐색(REST 쿼리)과 컨테이너 간 공유 상태의 겸용, 매핑·ISM·단일 노드 함정 학습</td>
+            <td>대시보드 요구가 없으면 SQLite 강등이 옳다</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0004-why-rule-engine.md"><b>규칙 엔진</b></a></td>
+            <td>ML을 쓰지 않는 이유를 물을 지점</td>
+            <td>임계값이 환경부·기상청 공인 기준 — 가치는 예측이 아니라 기준의 정확한 반영과 설명 가능성</td>
+            <td>자체 예측 요구 시 모델을 입력 지수로 추가</td>
+          </tr>
+          <tr>
+            <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0005-aws-migration-path.md"><b>로컬 Docker</b></a></td>
+            <td>비용 절약이 아니라 검증 가능성의 선택</td>
+            <td>모든 코드가 <code>docker compose up</code>으로 제3자 재현 가능. 검증 불가한 AWS 코드는 삭제(ADR-0001)</td>
+            <td>실사용자 상시 제공 시 EventBridge+Lambda+SQS</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -529,138 +360,40 @@ footer{
 
   <section>
     <div class="sec-head">
-      <h2>개선 순서</h2>
-      <p>번호는 의존 순서입니다 — 앞 단계가 뒤 단계의 전제입니다</p>
+      <h2>운영 품질</h2>
+      <p>전부 Docker에서 장애를 실제로 일으켜 검증한 항목입니다</p>
     </div>
-    <div class="steps">
-
-      <div class="step">
-        <span class="dot"></span>
-        <h3>거짓말을 멈춘다 <span class="chip g3" style="vertical-align:middle">완료</span></h3>
-        <div class="body">
-          <p>사용자에게 틀린 정보가 나가는 경로와, 실패가 성공으로 보고되는 경로를 먼저 끊습니다. 이게 안 되면 나머지 개선은 잘못된 신호 위에 쌓입니다.</p>
-          <ul>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/33">#33</a> 결측값 0 대체 제거 — <span class="num">UNKNOWN</span> 등급 도입</li>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/34">#34</a> 외부 채널 전량 실패 시 시그니처 전진 금지</li>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/35">#35</a> 수집·발행 실패를 실제 태스크 실패로 올리고 통보</li>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/38">#38</a> 시크릿 마스킹 — 로그와 페이로드 양쪽</li>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/50">#50</a> 카카오 토큰 회전 저장 (알림 영구 중단 차단)</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="dot"></span>
-        <h3>상태를 잃지 않는다</h3>
-        <div class="body">
-          <p>영속성과 멱등성. 재시작·재처리가 데이터를 늘리거나 지우지 않게 만듭니다. 백필 서사는 여기서부터 가능해집니다.</p>
-          <ul>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/36">#36</a> Kafka 볼륨 + 보존 72h + <span class="num">earliest</span></li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/47">#47</a> Airflow 메타DB 볼륨화</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/41">#41</a> <span class="num">event_id</span> · 멱등 프로듀서 · OpenSearch upsert</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/37">#37</a> OpenSearch 재연결 · 인덱스 템플릿 · ISM</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="dot"></span>
-        <h3>측정할 수 있게 만든다 <span class="chip g2" style="vertical-align:middle">2/3</span></h3>
-        <div class="body">
-          <p>구조화 로깅과 메트릭. README에 쓸 숫자가 여기서 나오고, 운영 대시보드(<a href="https://github.com/hyeongyu-data/air-quality-project/issues/24">#24</a>)의 선행 조건이기도 합니다.</p>
-          <ul>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/49">#49</a> 구조화 로깅 · 채널별 발송 결과 · 결측률 · end-to-end 지연</li>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a> 쿨다운 상태 분리 + 최대 무발송 간격</li>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a> 컨슈머 데몬화 + healthcheck</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="dot"></span>
-        <h3>회귀를 막는다</h3>
-        <div class="body">
-          <p>테스트 가능한 구조로 바꾼 뒤에 리팩터링합니다. 순서가 반대면 리팩터링이 검증 없는 변경이 됩니다.</p>
-          <ul>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/43">#43</a> 의존성 주입 · API 픽스처 계약 테스트 · 커버리지 게이트</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/48">#48</a> 메시지 스키마 계약 + DLQ</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/45">#45</a> 죽은 코드 청소 → <a href="https://github.com/hyeongyu-data/air-quality-project/issues/46">#46</a> producer 분해</li>
-          </ul>
-        </div>
-      </div>
-
-      <div class="step">
-        <span class="dot"></span>
-        <h3>근거와 증거를 남긴다 <span class="chip g2" style="vertical-align:middle">1/3</span></h3>
-        <div class="body">
-          <p>포트폴리오 점수가 가장 크게 움직이는 구간입니다. 과잉 설계를 <em>인정하고 근거를 대는 쪽</em>이 숨기는 쪽보다 언제나 높게 평가됩니다.</p>
-          <ul>
-            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/52">#52</a> ADR 5편 — 왜 Kafka인가, 재검토 조건은 무엇인가</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/51">#51</a> README 재구성 — 결과 · 수치 · 데이터 계약 · 알려진 한계</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/53">#53</a> 트러블슈팅 서사 3건</li>
-          </ul>
-        </div>
-      </div>
-
+    <div class="grid2">
+      <ul class="checks">
+        <li><b>재생성 내구성</b><span class="how">Kafka 토픽·오프셋, Airflow DAG 상태·이력, OpenSearch 데이터가 <code>docker compose down/up</code>을 넘어 유지 — 볼륨 소유권 함정(non-root vs root 생성)을 실측으로 회피</span></li>
+        <li><b>장애 복원</b><span class="how">브로커·OpenSearch가 죽은 채 기동해도 지수 백오프(5→300초)로 스스로 재연결. OpenSearch 중단 중에도 로컬 캐시로 쿨다운 유지</span></li>
+        <li><b>수명 관리</b><span class="how">SIGTERM 1초 내 정리 종료(exit 0), 하트비트 파일로 "프로세스 생존"이 아니라 "루프 생존"을 healthcheck</span></li>
+        <li><b>보존 정책</b><span class="how">Kafka 72h · OpenSearch ISM 90일 — 무한 증가하는 저장소가 없다</span></li>
+      </ul>
+      <ul class="checks">
+        <li><b>CI 게이트</b><span class="how">compile + 143 테스트가 머지 필수 조건(브랜치 보호). 패키지 import 스모크로 "CI 초록인데 런타임 완파"류 재발 방지</span></li>
+        <li><b>협업 프로세스</b><span class="how">Issue → 브랜치 → PR → CI → squash. CODEOWNERS · 보안 체크리스트 템플릿 · Dependabot 7일 SLA</span></li>
+        <li><b>결정 기록</b><span class="how">ADR 5편 — 전부 검토한 대안과 재검토 조건 포함. 장애 시나리오는 <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/operational-risks.md">운영 리스크 문서</a>에 파일:라인 근거로</span></li>
+        <li class="todo"><b>남은 것 (진행 중)</b><span class="how">구조화 로깅·메트릭(#49) · 메시지 스키마 계약+DLQ(#48) · API 파싱 계약 테스트(#43) · README 실행 증거(#51)</span></li>
+      </ul>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
-      <h2>구성 변화</h2>
-      <p>메달리언 제거 후</p>
-    </div>
-    <div class="split">
-      <div class="card">
-        <p class="eyebrow">유지</p>
-        <h3>본체 5개 서비스</h3>
-        <ul class="stack">
-          <li><span class="tag">수집</span> Airflow — 매시간 공공 API 3종 수집·발행</li>
-          <li><span class="tag">전달</span> Kafka — <span class="num">seoul-weather</span> 단일 토픽</li>
-          <li><span class="tag">판정</span> Consumer — 규칙 엔진 · 4채널 발송</li>
-          <li><span class="tag">이력</span> OpenSearch — 판정 이력 · 쿨다운 상태</li>
-          <li><span class="tag">점검</span> Kafka UI — 토픽 확인</li>
-        </ul>
-      </div>
-      <div class="card">
-        <p class="eyebrow">제거</p>
-        <h3>센서 로그 메달리언</h3>
-        <ul class="stack">
-          <li class="gone"><span class="tag">생성</span> log-generator — <span class="num">random.uniform()</span> 가짜 센서값</li>
-          <li class="gone"><span class="tag">수집</span> Fluent Bit · Logstash</li>
-          <li class="gone"><span class="tag">전달</span> Vector → Kinesis Firehose</li>
-          <li class="gone"><span class="tag">변환</span> Glue Bronze→Silver→Gold</li>
-        </ul>
-        <p class="note" style="margin-top:12px">AWS 설계 의도는 README의 이전 경로 서술과 ADR로 남깁니다. 검증할 수 없는 코드를 지우는 판단 자체가 근거와 함께 기록되면 자산입니다.</p>
-      </div>
+      <h2>엔지니어링 과정</h2>
+      <p>이 저장소의 차별점은 완성된 코드가 아니라 결함을 다룬 방식입니다</p>
     </div>
     <div class="callout">
-      <p><b>왜 통합이 아니라 삭제인가.</b> 기상 데이터를 로컬 메달리언(DuckDB/Parquet)으로 흘리는 안도 검토했습니다. 그러나 현재 데이터율은 <span class="num">시간당 1건</span>입니다. Gold의 시간별 집계가 그룹당 1행이 되는 웨어하우스는 돌아가더라도 아무것도 증명하지 못합니다.</p>
-      <p>없는 문제를 위해 인프라를 짓는 것은 리뷰어가 가장 경계하는 종류의 과설계입니다. 데이터율이 오르고 OpenSearch로 답이 안 나오는 질의가 생기면 그때 다시 봅니다 — 그 <em>재검토 조건</em>을 ADR에 명시하는 것까지가 이 결정의 일부입니다.</p>
-    </div>
-  </section>
-
-  <section>
-    <div class="sec-head">
-      <h2>진행 현황</h2>
-      <p>2026-07-29 기준</p>
-    </div>
-    <div class="tally">
-      <div class="card"><p class="who">등록 이슈</p><b class="num">36</b><p class="note">누적</p></div>
-      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">25</b><p class="note">P0 6건 전량 포함</p></div>
-      <div class="card"><p class="who">머지된 PR</p><b class="num" style="color:var(--g-good)">26</b><p class="note">#31 · #56~#79 (Dependabot 4건 포함)</p></div>
-      <div class="card"><p class="who">남음</p><b class="num">11</b><p class="note">P0 0 · P1 3 · P2 5 · 문서 3</p></div>
-    </div>
-    <div class="callout">
-      <p><b>이번 회차에 끝낸 것.</b> 사용자에게 틀린 정보가 나가는 경로(결측 0 치환·황사 죽은 지표·타임존), 실패가 성공으로 기록되던 경로(쿨다운 전진·DAG 성공 반환), 키가 로그·페이로드로 새던 경로를 막고 발행·색인에 멱등성을 넣었습니다. 회귀 테스트는 18개에서 <span class="num">101개</span>로 늘었고, 죽은 코드 <span class="num">354줄</span>을 걷어냈습니다.</p>
-      <p><b>미뤄 뒀던 인프라 두 건도 실측으로 끝냈습니다.</b> Kafka 볼륨은 <span class="num">/var/lib/kafka/data</span>가 이미지에 <span class="num">appuser:root 0775</span>로 존재하는 것을 확인해 마운트 지점을 정했고, <span class="num">docker compose down</span> 후에도 토픽과 컨슈머 오프셋이 유지되는 것을 확인했습니다. OpenSearch는 죽은 상태로 컨슈머를 재시작해 백오프 재연결이 도는 것까지 봤습니다.</p>
-      <p><b>그리고 실제로 돌려보다 회귀를 하나 잡았습니다.</b> 죽은 코드 청소 때 <span class="num">producer/__init__.py</span>의 export를 함께 정리하지 않아 DAG가 <span class="num">ImportError</span>로 죽고 있었는데, CI는 초록색이었습니다. <span class="num">compileall</span>은 문법만 보고 테스트는 패키지 <span class="num">__init__</span>을 거치지 않았기 때문입니다. 패키지 import 테스트를 추가해 막았습니다(<a href="https://github.com/hyeongyu-data/air-quality-project/pull/71">PR #71</a>).</p>
+      <p><b>진단부터 했습니다.</b> 데이터 엔지니어링 실무·플랫폼 아키텍처·SRE·채용, 네 관점으로 독립 검토해 결함 28건을 심각도별로 등록했습니다. 그중에는 "API 장애 시 결측이 0이 되어 한여름에 동상 경고가 나간다", "발송이 실패해도 성공으로 기록돼 알림이 영구 유실된다" 같은 P0 6건이 있었습니다.</p>
+      <p><b>의존 순서로 고쳤습니다.</b> 거짓말을 멈춘다(오알림·실패 은폐) → 상태를 잃지 않는다(영속성·멱등성) → 측정할 수 있게 만든다 → 회귀를 막는다 → 근거를 남긴다. 순서를 뒤집으면 잘못된 데이터를 성실하게 영속화하게 됩니다.</p>
+      <p><b>전부 실측으로 검증했습니다.</b> 볼륨 소유권은 컨테이너를 띄워 확인했고, 장애는 실제로 일으켰고(OpenSearch 중단, stale pid 재현), 회귀 테스트는 18개에서 143개가 됐습니다. 검증할 수 없는 코드(실행된 적 없는 AWS Glue 메달리언)는 근거를 ADR로 남기고 삭제했습니다 — <b>검증 불가능한 코드를 두지 않는 것도 설계 결정입니다.</b></p>
     </div>
   </section>
 
   <footer>
-    <p>이 문서는 저장소 <span class="num">docs/dashboard.html</span>에 함께 보관됩니다. 이슈 상태가 바뀌면 「진행 현황」의 집계와 해당 결함 행을, 새 결함이 발견되면 「결함 인벤토리」와 「영역별 분포」를 갱신합니다.</p>
-    <p>진단 근거는 각 항목의 파일·라인 표기를 따라가면 원본 코드에서 직접 확인할 수 있습니다.</p>
+    <p>이 문서는 저장소 <span class="num">docs/dashboard.html</span>로 관리됩니다. 숫자(테스트·PR·이슈)가 바뀌면 상단 지표를, 설계가 바뀌면 해당 카드와 ADR 링크를 갱신합니다.</p>
+    <p>결함 인벤토리와 개선 이력의 전체 기록: <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/operational-risks.md">operational-risks.md</a> · <a href="https://github.com/hyeongyu-data/air-quality-project/issues?q=is%3Aissue">GitHub Issues</a></p>
   </footer>
 
 </div>
