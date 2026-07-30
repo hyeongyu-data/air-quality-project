@@ -30,7 +30,7 @@ def _cron_hours(expression: str) -> set:
 
 
 def _dag_cron() -> str:
-    match = re.search(r'schedule_interval="([^"]+)"', DAG_SOURCE)
+    match = re.search(r'schedule(?:_interval)?="([^"]+)"', DAG_SOURCE)
     assert match, "DAG에서 schedule_interval을 찾지 못했습니다"
     return match.group(1)
 

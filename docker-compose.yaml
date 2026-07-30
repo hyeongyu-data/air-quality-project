@@ -7,7 +7,7 @@ networks:
 volumes:
   kafka_data:
     driver: local
-  airflow_data:
+  airflow_home:
     driver: local
   opensearch_data:
     driver: local
@@ -114,8 +114,6 @@ services:
       # Executor & 로딩
       AIRFLOW__CORE__EXECUTOR: SequentialExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: 3
-      AIRFLOW__CORE__DAG_CONCURRENCY: 3
       
       # 데이터베이스
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
@@ -145,7 +143,12 @@ services:
       # Consumer 스크립트
       - ./consumer:/opt/airflow/consumer
       # 영속 데이터
-      - airflow_data:/opt/airflow/logs
+      # 홈 전체를 볼륨에 올린다. 메타DB(airflow.db)가 홈 바로 아래라
+      # logs만 마운트하면 컨테이너 재생성 시 DAG on/off·실행 이력이 전멸한다.
+      # /opt/airflow는 이미지에 airflow:root 소유로 존재해서, 빈 명명 볼륨을
+      # 붙이면 Docker가 내용과 소유권을 복사한다(root 소유 생성 함정 회피 —
+      # 이미지에 없는 경로였다면 root 0755로 생성돼 uid 50000이 못 쓴다).
+      - airflow_home:/opt/airflow
       # .env 파일 (선택사항)
       - ./.env:/opt/airflow/.env:ro
     
