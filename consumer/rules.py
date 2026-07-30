@@ -7,6 +7,7 @@
 - 권고 행동 그룹화
 """
 
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -59,9 +60,36 @@ def grade_signature(classification_objects: Dict) -> str:
     return "|".join(parts)
 
 
-def should_send(previous_signature: Optional[str], current_signature: str) -> bool:
-    """이전 시그니처가 없거나(최초) 등급이 바뀌었을 때만 True."""
-    return previous_signature != current_signature
+def should_send(
+    previous_signature: Optional[str],
+    current_signature: str,
+    last_sent_at: Optional[str] = None,
+    max_silence_seconds: Optional[float] = None,
+    now: Optional[datetime] = None,
+) -> bool:
+    """외부 채널로 발송할지 판정한다.
+
+    기본 규칙: 이전 시그니처가 없거나(최초) 등급이 바뀌었으면 True.
+
+    최대 무발송 간격: 등급이 오래 유지되면 쿨다운이 발송을 계속 생략하는데,
+    사용자는 "조용한 게 정상인지 파이프라인이 죽은 건지" 구분할 수 없다.
+    마지막 발송에서 max_silence_seconds가 지났으면 등급이 같아도 다시 보낸다.
+
+    last_sent_at 파싱 실패나 미기록은 간격 판정을 건너뛴다(기본 규칙만 적용) —
+    상태가 불완전하다고 발송을 늘리는 쪽으로 기울면 스팸이 된다.
+    """
+    if previous_signature != current_signature:
+        return True
+    if not max_silence_seconds or not last_sent_at:
+        return False
+    try:
+        sent = datetime.fromisoformat(last_sent_at)
+    except (TypeError, ValueError):
+        return False
+    if sent.tzinfo is None:
+        return False
+    current = now or datetime.now(sent.tzinfo)
+    return (current - sent).total_seconds() >= max_silence_seconds
 
 
 def should_record_signature(

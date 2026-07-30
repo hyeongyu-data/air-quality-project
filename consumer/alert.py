@@ -16,8 +16,10 @@ from typing import Dict, List, Optional
 
 try:
     from .rules import should_record_signature
+    from . import opensearch_setup
 except ImportError:  # 직접 실행 시
     from rules import should_record_signature
+    import opensearch_setup
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
@@ -738,6 +740,11 @@ class OpenSearchAlertSender:
     # OpenSearch가 죽어 있을 때도 쿨다운이 동작하도록 마지막 시그니처를 남긴다.
     DEFAULT_STATE_PATH = ".signature_state.json"
 
+    # 지역별 쿨다운 상태 문서를 담는 전용 인덱스. 문서 ID = 지역.
+    # 문서 GET은 refresh와 무관하게 실시간이라, 이력 인덱스를 검색하던
+    # 방식의 refresh 지연 레이스가 사라진다.
+    STATE_INDEX = opensearch_setup.STATE_INDEX
+
     def __init__(self, opensearch_client=None):
         """
         OpenSearch 클라이언트 초기화
@@ -759,6 +766,35 @@ class OpenSearchAlertSender:
         self.client = client
         self.enabled = client is not None
 
+    def _record_state(self, alert_data: Dict) -> None:
+        """지역별 쿨다운 상태 문서를 갱신하고 로컬 캐시에도 남긴다.
+
+        last_external_send_at은 실제로 외부 채널에 전달됐을 때만 갱신한다.
+        쿨다운으로 생략된 회차까지 갱신하면 최대 무발송 간격이 영영 차지 않아
+        하트비트 재발송이 동작하지 않는다.
+        """
+        region = alert_data.get("region", "전국")
+        signature = alert_data.get("grade_signature", "")
+        delivered = bool(alert_data.get("delivered_channels"))
+        now_iso = now_kst().isoformat()
+
+        doc = {"region": region, "grade_signature": signature, "updated_at": now_iso}
+        if delivered:
+            doc["last_external_send_at"] = now_iso
+
+        try:
+            # doc_as_upsert: 문서가 없으면 생성, 있으면 있는 필드만 덮어쓴다.
+            # 미발송 회차에는 last_external_send_at이 doc에 없어 기존 값이 유지된다.
+            self.client.update(
+                index=self.STATE_INDEX,
+                id=region,
+                body={"doc": doc, "doc_as_upsert": True},
+            )
+        except Exception as e:
+            logger.warning(f"쿨다운 상태 문서 갱신 실패: {str(e)}")
+
+        self._write_cache(region, signature, doc.get("last_external_send_at"))
+
     def _read_cache(self) -> Dict[str, str]:
         try:
             if self.state_path.exists():
@@ -767,7 +803,9 @@ class OpenSearchAlertSender:
             logger.warning(f"시그니처 캐시 읽기 실패: {str(e)}")
         return {}
 
-    def _write_cache(self, region: str, signature: str) -> None:
+    def _write_cache(
+        self, region: str, signature: str, last_sent_at: Optional[str] = None
+    ) -> None:
         """마지막으로 알린 등급을 로컬에 남긴다.
 
         OpenSearch 미가용 시 조회가 항상 None을 돌려주면 쿨다운이 무력화돼
@@ -775,7 +813,12 @@ class OpenSearchAlertSender:
         """
         try:
             cache = self._read_cache()
-            cache[region] = signature
+            entry = cache.get(region)
+            entry = dict(entry) if isinstance(entry, dict) else {}
+            entry["grade_signature"] = signature
+            if last_sent_at:
+                entry["last_external_send_at"] = last_sent_at
+            cache[region] = entry
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
             self.state_path.write_text(
                 json.dumps(cache, ensure_ascii=False), encoding="utf-8"
@@ -836,10 +879,7 @@ class OpenSearchAlertSender:
             )
             
             if record_signature:
-                self._write_cache(
-                    alert_data.get("region", "전국"),
-                    alert_data.get("grade_signature", ""),
-                )
+                self._record_state(alert_data)
             logger.info(f"OpenSearch 저장 성공: {index_name} (ID: {response['_id']})")
             return True
             
@@ -847,18 +887,44 @@ class OpenSearchAlertSender:
             logger.error(f"OpenSearch 저장 실패: {str(e)}")
             return False
 
-    def latest_signature(self, region: str) -> Optional[str]:
-        """해당 region의 가장 최근 저장된 grade_signature 조회.
+    def _cached_state(self, region: str) -> Dict:
+        """로컬 캐시 항목을 dict로 정규화한다(옛 str 형식 호환)."""
+        entry = self._read_cache().get(region)
+        if isinstance(entry, dict):
+            return entry
+        if isinstance(entry, str):
+            return {"grade_signature": entry}
+        return {}
 
-        컨슈머는 매시간 재시작돼 인메모리 상태가 사라지므로 "직전 등급"은
-        durable 저장소인 OpenSearch에서 읽는다. 미연결/조회 실패 시 None을
-        반환해 호출측이 발송하도록(fail-open) 둔다 — 알림 유실을 막는다.
+    def cooldown_state(self, region: str) -> Dict:
+        """해당 region의 쿨다운 상태(직전 시그니처 + 마지막 외부 발송 시각).
+
+        지역별 상태 문서를 ID로 GET 한다. 문서 GET은 refresh와 무관하게
+        실시간이라 이력 인덱스를 검색하던 방식의 레이스가 없다.
+        상태 문서가 아직 없으면(기존 배포에서 이행 직후) 이력 인덱스에서
+        한 번 읽어오고, 미연결/실패 시 로컬 캐시를 쓴다. 최종적으로 아무것도
+        없으면 빈 dict — 호출측이 발송하도록(fail-open) 둔다.
         """
         if not self.enabled or not self.client:
-            cached = self._read_cache().get(region)
-            if cached is not None:
-                logger.info("OpenSearch 미연결 → 로컬 캐시의 직전 시그니처 사용")
-            return cached
+            state = self._cached_state(region)
+            if state:
+                logger.info("OpenSearch 미연결 → 로컬 캐시의 쿨다운 상태 사용")
+            return state
+        try:
+            doc = self.client.get(index=self.STATE_INDEX, id=region)
+            source = doc.get("_source", {})
+            return {
+                "grade_signature": source.get("grade_signature"),
+                "last_external_send_at": source.get("last_external_send_at"),
+            }
+        except Exception as e:
+            if getattr(e, "status_code", None) == 404 or "NotFoundError" in type(e).__name__:
+                return self._legacy_signature_lookup(region)
+            logger.warning(f"쿨다운 상태 조회 실패 → 로컬 캐시 확인: {str(e)}")
+            return self._cached_state(region)
+
+    def _legacy_signature_lookup(self, region: str) -> Dict:
+        """상태 문서 도입 전 데이터에서 직전 시그니처를 읽는 이행 경로."""
         try:
             response = self.client.search(
                 index=f"{self.index_prefix}-*",
@@ -873,11 +939,15 @@ class OpenSearchAlertSender:
             )
             hits = response.get("hits", {}).get("hits", [])
             if hits:
-                return hits[0].get("_source", {}).get("grade_signature")
-            return None
+                return {"grade_signature": hits[0].get("_source", {}).get("grade_signature")}
+            return {}
         except Exception as e:
-            logger.warning(f"직전 시그니처 조회 실패 → 로컬 캐시 확인: {str(e)}")
-            return self._read_cache().get(region)
+            logger.warning(f"이력 시그니처 조회 실패 → 로컬 캐시 확인: {str(e)}")
+            return self._cached_state(region)
+
+    def latest_signature(self, region: str) -> Optional[str]:
+        """직전 등급 시그니처만 필요할 때의 축약 조회."""
+        return self.cooldown_state(region).get("grade_signature")
 
     @staticmethod
     def _calculate_severity(alert_data: Dict) -> str:
