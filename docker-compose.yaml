@@ -227,6 +227,15 @@ services:
     # 시작 명령어
     command: python consumer/consumer.py
     
+    # 루프가 주기적으로 갱신하는 하트비트 파일의 나이로 생존을 판정한다.
+    # 프로세스는 떠 있는데 루프가 멈춘 상태(행)를 잡기 위한 것이다.
+    healthcheck:
+      test: ["CMD-SHELL", "test $$(( $$(date +%s) - $$(stat -c %Y /tmp/consumer-heartbeat) )) -lt 90"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    
     # 네트워크
     networks:
       - weather-network
@@ -238,8 +247,9 @@ services:
           cpus: '1'
           memory: 512M
     
-    # 재시작 정책 (지속 실행)
-    restart: unless-stopped
+    # 재시작 정책. 예전에는 1시간마다 스스로 종료하고 unless-stopped로
+    # 부활했다. 이제 무한 루프 + 시그널 종료라, 비정상 종료만 재시작한다.
+    restart: on-failure
     
     # 로깅
     logging:
