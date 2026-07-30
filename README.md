@@ -290,12 +290,14 @@ DAG는 다음 경우에 태스크를 실패시킵니다. 실패는 `on_failure_c
 python3 -m compileall producer consumer dags scripts
 ```
 
-단위 테스트(순수 판정 로직):
+단위 테스트(169개 — 판정 로직·발송 게이트·API 파싱 계약·수명 관리):
 
 ```bash
-pip install pytest
-pytest -q
+pip install pytest pytest-cov requests python-dotenv kafka-python opensearch-py
+pytest -q --cov=consumer --cov=producer
 ```
+
+공공 API 응답 형태는 `tests/fixtures/`의 픽스처로 고정돼 있어, 포털이 스키마를 바꾸면 운영 결측 경보 전에 CI가 먼저 깨집니다. 커버리지 바닥(50%)은 목표가 아니라 후퇴 방지선입니다.
 
 `master`로 향하는 PR·push는 GitHub Actions(`.github/workflows/ci.yml`)가 위 compile + pytest를 자동 실행하며, 통과가 머지 필수 조건이다.
 

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+  <header>
+    <resultCode>00</resultCode>
+    <resultMsg>NORMAL_SERVICE</resultMsg>
+  </header>
+  <body>
+    <items>
+      <item>
+        <code>A07_2</code>
+        <areaNo>1100000000</areaNo>
+        <date>2026073006</date>
+        <today>2</today>
+        <tomorrow>3</tomorrow>
+      </item>
+    </items>
+  </body>
+</response>

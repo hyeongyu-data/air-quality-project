@@ -28,8 +28,16 @@ jobs:
         # 패키지 import 스모크 테스트가 실제 런타임 의존성을 필요로 한다.
         # compileall은 문법만 보므로 __init__.py가 없는 이름을 export 해도
         # 잡지 못한다(실제로 DAG가 깨진 적이 있다).
-        run: pip install pytest requests python-dotenv kafka-python opensearch-py
+        run: pip install pytest pytest-cov requests python-dotenv kafka-python opensearch-py
 
-      # 순수 함수 단위 테스트 (consumer/rules.py 등)
+      # 단위 테스트 + 커버리지 게이트.
+      # 바닥값 50%는 현재 실측(53%) 바로 아래다 — 목표가 아니라 후퇴 방지선.
+      # 커버리지를 올리면 바닥도 따라 올린다.
       - name: Run tests
-        run: pytest -q
+        run: pytest -q --cov=consumer --cov=producer --cov-fail-under=50
+
+      # compose 문법·참조 무결성. env_file 참조 때문에 빈 .env가 필요하다.
+      - name: Validate docker compose
+        run: |
+          touch .env
+          docker compose config -q
