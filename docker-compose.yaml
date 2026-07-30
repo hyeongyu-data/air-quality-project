@@ -155,6 +155,7 @@ services:
     # 시작 명령어 (standalone 모드)
     command: >
       bash -c "
+      rm -f /opt/airflow/airflow-webserver*.pid &&
       airflow db migrate &&
       (airflow users create --username airflow --password airflow --firstname Airflow --lastname Admin --role Admin --email airflow@example.com ||
        airflow users reset-password --username airflow --password airflow) &&
