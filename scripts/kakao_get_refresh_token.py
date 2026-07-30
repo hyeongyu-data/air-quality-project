@@ -9,6 +9,7 @@ import json
 import os
 import threading
 import urllib.parse
+from pathlib import Path
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -122,13 +123,49 @@ def main():
         client_secret,
     )
 
-    print("\n발급 성공. .env에 아래 값을 넣으세요.")
-    print(f"KAKAO_REFRESH_TOKEN={token_data.get('refresh_token', '')}")
-    # 전체 응답에는 access_token까지 들어 있다. 터미널 스크롤백과 셸 히스토리에
-    # 남기지 않도록 만료 정보만 출력한다.
+    refresh_token = token_data.get("refresh_token", "")
+    if not refresh_token:
+        raise SystemExit("응답에 refresh_token이 없습니다. 응답 키: "
+                         + ", ".join(sorted(token_data.keys())))
+
+    # 발급 직후 실제로 갱신이 되는지 검증한다 — 여기서 실패하면
+    # 컨슈머에서 KOE322로 조용히 죽는 것을 지금 발견하는 것이다.
+    verify = {
+        "grant_type": "refresh_token",
+        "client_id": rest_api_key,
+        "refresh_token": refresh_token,
+    }
+    if client_secret:
+        verify["client_secret"] = client_secret
+    check = requests.post("https://kauth.kakao.com/oauth/token", data=verify, timeout=15)
+    if check.status_code != 200 or "access_token" not in check.json():
+        raise SystemExit(f"발급된 토큰 검증 실패: {check.status_code} "
+                         f"{check.json().get('error_code', '')}")
+
+    # 사람이 복사-붙여넣기 하다 access_token을 넣는 실수가 실제로 있었다.
+    # 토큰을 화면에 찍는 대신 .env를 직접 갱신한다.
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    if env_path.exists():
+        lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+        replaced = False
+        for i, line in enumerate(lines):
+            if line.startswith("KAKAO_REFRESH_TOKEN="):
+                lines[i] = f"KAKAO_REFRESH_TOKEN={refresh_token}\n"
+                replaced = True
+                break
+        if not replaced:
+            lines.append(f"KAKAO_REFRESH_TOKEN={refresh_token}\n")
+        env_path.write_text("".join(lines), encoding="utf-8")
+        print(f"\n발급·검증 완료. {env_path} 의 KAKAO_REFRESH_TOKEN을 갱신했습니다.")
+        print("컨테이너 반영: docker compose up -d --force-recreate consumer")
+    else:
+        # .env가 없으면 그때만 값을 출력한다
+        print("\n발급·검증 완료. .env가 없어 직접 출력합니다:")
+        print(f"KAKAO_REFRESH_TOKEN={refresh_token}")
+
     print(
-        f"\n(access_token 만료 {token_data.get('expires_in')}초, "
-        f"refresh_token 만료 {token_data.get('refresh_token_expires_in')}초)"
+        f"(refresh_token 만료 {token_data.get('refresh_token_expires_in')}초 "
+        f"≈ {int(token_data.get('refresh_token_expires_in', 0)) // 86400}일)"
     )
 
 
