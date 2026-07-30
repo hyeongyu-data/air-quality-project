@@ -4,4 +4,4 @@ opensearch-py==3.2.0
 python-dotenv==1.2.2
 # Airflow는 pip가 아니라 compose 이미지(apache/airflow:2.10.0)로 실행된다.
 # 이 핀은 로컬 IDE/타입체크 참조용이며, 이미지 태그와 함께 올린다.
-apache-airflow==2.10.0
+apache-airflow==3.3.0
