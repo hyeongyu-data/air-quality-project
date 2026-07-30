@@ -1,0 +1,69 @@
+# 운영 보안 프로필 — 기본 compose 위에 겹쳐 쓴다.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d
+#
+# 기본 구성은 로컬 학습용(무인증·평문·기본 계정)이다. 이 오버레이는:
+#   1. 관리 포트를 전부 127.0.0.1에만 바인딩 (외부 노출 차단)
+#   2. 기본 계정·빈 Fernet 키 제거 — 시크릿 미설정이면 기동 자체가 실패한다
+#   3. OpenSearch TLS + 인증 활성화 (무인증 요청은 401)
+#   4. Kafka UI에 로그인 강제
+#
+# 필요한 환경변수(.env): AIRFLOW_ADMIN_PASSWORD, AIRFLOW_FERNET_KEY,
+#   OPENSEARCH_ADMIN_PASSWORD, KAFKA_UI_PASSWORD
+#
+# 알려진 한계(실배포 전 반드시 처리):
+#   - OpenSearch는 이미지의 데모 인증서·내장 admin 계정을 쓴다. 실배포에서는
+#     정식 인증서와 internal_users 교체가 필수다.
+#   - Kafka는 compose 내부 네트워크의 PLAINTEXT다. 포트를 127.0.0.1로 묶어
+#     외부 접근은 차단되지만, 브로커를 외부에 열려면 SASL/TLS가 선행돼야 한다.
+#   - 검증 절차·롤백 기준은 SECURITY.md의 "운영 프로필" 절 참고.
+
+services:
+  kafka:
+    ports: !override
+      - "127.0.0.1:9092:9092"
+
+  airflow:
+    ports: !override
+      - "127.0.0.1:8080:8080"
+    environment:
+      # 미설정이면 기동 실패 — 기본값으로 조용히 뜨는 것을 막는다
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:?운영 프로필에는 AIRFLOW_FERNET_KEY가 필요합니다 (python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")}
+    command: >
+      bash -c "
+      rm -f /opt/airflow/airflow-webserver*.pid &&
+      airflow db migrate &&
+      (airflow users create --username airflow --password \"$${AIRFLOW_ADMIN_PASSWORD:?}\" --firstname Airflow --lastname Admin --role Admin --email airflow@example.com ||
+       airflow users reset-password --username airflow --password \"$${AIRFLOW_ADMIN_PASSWORD:?}\") &&
+      exec airflow standalone
+      "
+
+  opensearch:
+    ports: !override
+      - "127.0.0.1:9200:9200"
+    environment:
+      # 보안 플러그인 활성화 → 데모 TLS 인증서 + 인증 강제
+      DISABLE_SECURITY_PLUGIN: 'false'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fku admin:admin 'https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+
+  consumer:
+    environment:
+      OPENSEARCH_USE_SSL: 'true'
+      OPENSEARCH_USER: admin
+      OPENSEARCH_PASSWORD: ${OPENSEARCH_ADMIN_PASSWORD:?운영 프로필에는 OPENSEARCH_ADMIN_PASSWORD가 필요합니다}
+
+  kafka-ui:
+    ports: !override
+      # 컨테이너 내부 포트는 8080 (기본 compose와 동일 매핑, 바인딩만 축소)
+      - "127.0.0.1:8081:8080"
+    environment:
+      AUTH_TYPE: LOGIN_FORM
+      SPRING_SECURITY_USER_NAME: admin
+      SPRING_SECURITY_USER_PASSWORD: ${KAFKA_UI_PASSWORD:?운영 프로필에는 KAFKA_UI_PASSWORD가 필요합니다}
+      # 운영에서는 UI를 통한 클러스터 설정 변경을 막는다
+      DYNAMIC_CONFIG_ENABLED: 'false'

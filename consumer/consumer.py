@@ -77,11 +77,17 @@ class OpenSearchConnector:
         self.connect()
 
     def _build_client(self) -> OpenSearch:
+        # 기본은 로컬 개발(무인증·평문). 운영 프로필은 환경변수로
+        # TLS·인증을 켠다 — docker-compose.prod.yaml 참고.
+        use_ssl = os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true"
+        user = os.getenv("OPENSEARCH_USER")
+        password = os.getenv("OPENSEARCH_PASSWORD")
         return OpenSearch(
             hosts=[{"host": self.host, "port": self.port}],
-            http_auth=None,  # 보안 비활성화 (개발용)
-            use_ssl=False,
-            verify_certs=False,
+            http_auth=(user, password) if user and password else None,
+            use_ssl=use_ssl,
+            # 데모/자체서명 인증서 환경을 위해 검증은 별도 플래그로
+            verify_certs=os.getenv("OPENSEARCH_VERIFY_CERTS", "false").lower() == "true",
             ssl_show_warn=False,
         )
 

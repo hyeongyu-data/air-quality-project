@@ -66,3 +66,41 @@
 | Dockerfile | hadolint | 수정하거나, 근거가 있으면 `# hadolint ignore=규칙` 위에 사유 주석을 단다 |
 
 오탐 예외는 억제 주석(noqa/hadolint ignore)에 **반드시 사유를 함께** 남기고, PR 리뷰에서 그 사유를 확인합니다.
+
+## 운영 프로필 (docker-compose.prod.yaml)
+
+기본 compose는 로컬 학습용(무인증·평문·기본 계정)입니다. 운영에 가까운 구성이 필요하면 오버레이를 겹칩니다.
+
+```bash
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
+```
+
+| 항목 | 기본(dev) | 운영 프로필 |
+| --- | --- | --- |
+| 관리 포트(9092·8080·9200·8081) | 모든 인터페이스 | **127.0.0.1 전용** |
+| Airflow 계정/Fernet 키 | `airflow/airflow`, 빈 키 | **환경변수 필수 — 미설정이면 기동 실패** |
+| OpenSearch | 보안 플러그인 off, http | **TLS + 인증** (무인증 401) |
+| Kafka UI | 무인증, 동적 설정 허용 | **로그인 강제**, 동적 설정 차단 |
+
+필요 환경변수: `AIRFLOW_ADMIN_PASSWORD` · `AIRFLOW_FERNET_KEY` · `OPENSEARCH_ADMIN_PASSWORD` · `KAFKA_UI_PASSWORD`
+
+### 검증 절차
+
+```bash
+curl -sk https://localhost:9200/                  # 401 이어야 함
+curl -sk -u admin:$OPENSEARCH_ADMIN_PASSWORD https://localhost:9200/   # 200
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/api/clusters  # 302 (로그인 리다이렉트)
+docker port pj-opensearch 9200                    # 127.0.0.1:9200
+```
+
+Consumer가 TLS+인증으로 저장까지 하는지는 메시지 1건을 발행해 `weather-alert-*` 색인을 확인합니다.
+
+### 롤백
+
+오버레이 없이 재기동하면 기본 구성으로 돌아갑니다. 단, OpenSearch 보안 플러그인을 켰다 끄면 인덱스는 유지되지만 상태 전환 중 컨슈머가 백오프 재연결을 수행합니다(자동 복구).
+
+### 알려진 한계 — 실배포 전 필수 처리
+
+- OpenSearch는 이미지의 **데모 인증서와 내장 admin 계정**을 씁니다. 정식 인증서 발급과 `internal_users` 교체가 선행돼야 합니다.
+- Kafka는 compose 내부 네트워크의 PLAINTEXT입니다. 포트 바인딩으로 외부 접근은 차단되지만, 브로커를 네트워크 밖에 열려면 SASL/TLS가 필요합니다.
+- 시크릿은 여전히 `.env` 평문입니다. 클라우드 배포 시 시크릿 매니저로 이관합니다.
