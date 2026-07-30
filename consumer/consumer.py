@@ -16,13 +16,14 @@ import signal
 import time
 from pathlib import Path
 from typing import Dict, Optional, List
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 from opensearchpy import OpenSearch
 from dotenv import load_dotenv
 
 # 상대 import
 try:
     from . import opensearch_setup
+    from .schema import InvalidMessage, parse_message
     from .rules import (
         AlertRuleEngine, AlertGrouping,
         grade_signature, should_send, core_indices_unknown,
@@ -31,6 +32,7 @@ try:
 except ImportError:
     # 직접 실행 시
     import opensearch_setup
+    from schema import InvalidMessage, parse_message
     from rules import (
         AlertRuleEngine, AlertGrouping, grade_signature, should_send, core_indices_unknown,
     )
@@ -254,7 +256,10 @@ class KafkaWeatherConsumer:
             "KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"
         )
         self.group_id = group_id
-        self.topics = topics or ["seoul-weather"]
+        # 토픽명 단일 출처. 프로듀서와 같은 환경변수를 읽어 오타가 나도
+        # 양쪽이 같은 토픽을 본다(auto-create 환경에서 서로 다른 빈 토픽을
+        # 보며 조용히 동작하던 사고 방지).
+        self.topics = topics or [os.getenv("KAFKA_TOPIC", "seoul-weather")]
         self.opensearch_client = opensearch_client
         self.consumer = None
         self._next_retry_at = 0.0
@@ -268,13 +273,18 @@ class KafkaWeatherConsumer:
                 *self.topics,
                 bootstrap_servers=self.bootstrap_servers,
                 group_id=self.group_id,
-                value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+                # 역직렬화는 처리 단계(schema.parse_message)에서 한다.
+                # 여기 두면 깨진 메시지가 poll() 안에서 터지는데, 수동 커밋에서는
+                # 오프셋이 전진하지 않아 같은 메시지를 영원히 받는 poison pill이 된다.
+                value_deserializer=None,
                 # earliest: 컨슈머가 죽어 있던 동안 쌓인 메시지를 건너뛰지 않는다.
                 # latest면 재구독 시 백로그가 조용히 사라진다. 중복은 등급
                 # 시그니처 쿨다운과 event_id 기반 upsert가 흡수한다.
                 auto_offset_reset='earliest',
-                enable_auto_commit=True,
-                max_poll_records=1
+                # 처리(판정·저장·발송)가 끝난 뒤에만 커밋한다. 자동 커밋은
+                # 처리 성공과 무관하게 오프셋을 전진시켜 실패 메시지를 유실했다.
+                enable_auto_commit=False,
+                max_poll_records=10
             )
             self._retry_interval = 5.0
             logger.info(f"Kafka 컨슈머 초기화 성공: {self.bootstrap_servers}")
@@ -298,32 +308,33 @@ class KafkaWeatherConsumer:
             return False
         return self.connect()
     
-    def consume_messages(self, timeout_ms: int = 5000) -> Optional[Dict]:
-        """
-        메시지 구독 (non-blocking)
-        
-        Args:
-            timeout_ms: 대기 시간 (밀리초)
-        
-        Returns:
-            메시지 또는 None
+    def consume_batch(self, timeout_ms: int = 5000) -> List:
+        """한 번의 poll이 돌려준 레코드 전부를 반환한다.
+
+        예전에는 첫 레코드만 반환하고 나머지를 버렸다. max_poll_records=1이라
+        사고가 안 났을 뿐, 그 설정을 바꾸는 순간 조용한 유실이었다.
         """
         if not self.consumer:
             logger.warning("Kafka 컨슈머가 초기화되지 않음")
-            return None
-        
+            return []
+
         try:
-            messages = self.consumer.poll(timeout_ms=timeout_ms)
-            
-            for topic_partition, records in messages.items():
-                for record in records:
-                    return record.value  # 첫 번째 메시지만 반환
-            
-            return None
-            
+            polled = self.consumer.poll(timeout_ms=timeout_ms)
+            return [record for records in polled.values() for record in records]
         except Exception as e:
             logger.error(f"메시지 구독 오류: {str(e)}")
-            return None
+            return []
+
+    def commit(self) -> bool:
+        """현재 poll 위치까지 오프셋을 커밋한다."""
+        if not self.consumer:
+            return False
+        try:
+            self.consumer.commit()
+            return True
+        except Exception as e:
+            logger.error(f"오프셋 커밋 실패(배치 재처리됨): {str(e)}")
+            return False
     
     def close(self):
         """컨슈머 종료"""
@@ -366,11 +377,18 @@ class WeatherAlertConsumer:
             os.getenv("CONSUMER_HEARTBEAT_PATH", "/tmp/consumer-heartbeat")
         )
         
+        # DLQ — 계약 위반·처리 불가 메시지의 격리처
+        self.dlq_topic = os.getenv(
+            "KAFKA_DLQ_TOPIC", f"{os.getenv('KAFKA_TOPIC', 'seoul-weather')}-dlq"
+        )
+        self._dlq_producer = None
+
         # 통계
         self.stats = {
             "total_processed": 0,
             "total_alerts_sent": 0,
-            "errors": 0
+            "errors": 0,
+            "dlq": 0,
         }
     
     def process_message(self, message: Dict) -> bool:
@@ -450,31 +468,81 @@ class WeatherAlertConsumer:
             
             logger.info(f"메시지 처리 완료: {processed.get('region')}")
             return True
-            
-        except Exception as e:
-            logger.error(f"메시지 처리 오류: {str(e)}")
+
+        except Exception:
+            # 예외는 handle_record가 받아 DLQ로 격리한다. 여기서 삼키면
+            # 실패 메시지가 커밋되어 조용히 유실된다(예전 동작).
             self.stats["errors"] += 1
-            return False
+            raise
     
-    def run_once(self) -> bool:
+    def _send_to_dlq(self, record, reason: str) -> bool:
+        """처리 불가 메시지를 DLQ 토픽으로 격리한다.
+
+        DLQ 발행이 실패하면 False — 호출측이 커밋을 보류해 배치가 재처리된다.
+        메시지를 버리는 것보다 재시도가 낫다.
+        """
+        try:
+            if self._dlq_producer is None:
+                self._dlq_producer = KafkaProducer(
+                    bootstrap_servers=self.kafka_consumer.bootstrap_servers,
+                    value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
+                    acks="all",
+                )
+            self._dlq_producer.send(self.dlq_topic, {
+                "reason": reason,
+                "source_topic": record.topic,
+                "source_offset": record.offset,
+                "failed_at": now_kst().isoformat(),
+                "raw": record.value.decode("utf-8", errors="replace") if record.value else None,
+            }).get(timeout=5)
+            self.stats["dlq"] += 1
+            logger.warning(f"DLQ 격리: offset={record.offset} 사유={reason}")
+            return True
+        except Exception as e:
+            logger.error(f"DLQ 발행 실패(커밋 보류, 재처리 예정): {str(e)}")
+            return False
+
+    def handle_record(self, record) -> str:
+        """레코드 하나를 처리하고 결과를 돌려준다: ok | dlq | dlq_failed"""
+        try:
+            message = parse_message(record.value)
+        except InvalidMessage as e:
+            return "dlq" if self._send_to_dlq(record, e.reason) else "dlq_failed"
+
+        try:
+            self.process_message(message)
+            return "ok"
+        except Exception as e:
+            # process_message는 내부에서 예외를 삼키지만, 여기까지 오는 예외는
+            # 메시지 자체가 처리 불가라는 뜻이다. 무한 재시도 대신 격리한다.
+            return "dlq" if self._send_to_dlq(record, f"처리 예외: {e}") else "dlq_failed"
+
+    def run_once(self) -> int:
         """
         한 번의 폴링·처리 사이클
-        
+
         Returns:
-            bool: 메시지 처리 여부
+            int: 처리한 레코드 수
         """
         # 끊긴 상태로 굳지 않도록 폴링마다 재연결 기회를 준다(백오프 적용).
         self.kafka_consumer.ensure_connection()
         if self.opensearch_connector.ensure_connection():
             self.alert_manager.opensearch_sender.attach(self.opensearch_connector.client)
 
-        message = self.kafka_consumer.consume_messages(timeout_ms=5000)
-        
-        if message:
-            return self.process_message(message)
-        else:
+        records = self.kafka_consumer.consume_batch(timeout_ms=5000)
+        if not records:
             logger.debug("대기 중인 메시지 없음")
-            return False
+            return 0
+
+        results = [self.handle_record(record) for record in records]
+
+        # DLQ 발행까지 실패한 레코드가 있으면 커밋하지 않는다 → 배치 재처리.
+        # 정상 처리분의 중복은 event_id upsert와 등급 시그니처가 흡수한다.
+        if "dlq_failed" in results:
+            logger.error("배치에 격리 실패 레코드 존재 → 커밋 보류")
+        else:
+            self.kafka_consumer.commit()
+        return len(records)
 
     def _handle_signal(self, signum, frame) -> None:
         """SIGTERM/SIGINT를 받으면 루프를 빠져나가 정상 종료한다."""
@@ -533,6 +601,8 @@ class WeatherAlertConsumer:
         """정상 종료 처리"""
         logger.info("컨슈머 종료 중...")
         self.kafka_consumer.close()
+        if self._dlq_producer is not None:
+            self._dlq_producer.close()
         
         # 최종 통계 출력
         print("\n" + "=" * 80)
@@ -541,6 +611,7 @@ class WeatherAlertConsumer:
         print(f"처리된 메시지: {self.stats['total_processed']}")
         print(f"발송된 알림: {self.stats['total_alerts_sent']}")
         print(f"발생한 오류: {self.stats['errors']}")
+        print(f"DLQ 격리: {self.stats['dlq']}")
         print("=" * 80 + "\n")
     
     def print_stats(self):

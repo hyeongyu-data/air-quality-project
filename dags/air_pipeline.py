@@ -169,14 +169,16 @@ def fetch_current_weather_data(**context) -> Dict:
         try:
             from producer.producer import WeatherDataCollector
             from producer.contract import (
-                build_event_id, collected_index_count, is_publishable, missing_index_keys,
+                SCHEMA_VERSION, build_event_id,
+                collected_index_count, is_publishable, missing_index_keys,
             )
         except ImportError:
             import sys
             sys.path.insert(0, "/opt/airflow")
             from producer.producer import WeatherDataCollector
             from producer.contract import (
-                build_event_id, collected_index_count, is_publishable, missing_index_keys,
+                SCHEMA_VERSION, build_event_id,
+                collected_index_count, is_publishable, missing_index_keys,
             )
         
         run_dt = context.get("data_interval_end") or pendulum.now(local_tz)
@@ -198,6 +200,7 @@ def fetch_current_weather_data(**context) -> Dict:
         # 스케줄 슬롯 기준 결정적 키. 태스크가 재시도돼도 같은 값이라
         # 중복 발행·중복 색인이 하류에서 걸러진다.
         current_weather["event_id"] = build_event_id("서울", run_dt)
+        current_weather["schema_version"] = SCHEMA_VERSION
 
         # 원본 API 응답 묶음은 XCom(메타DB)과 Kafka 페이로드 양쪽에 실리는데,
         # 하류 어디에서도 소비되지 않는다(판정은 최상위 필드로만 한다).
