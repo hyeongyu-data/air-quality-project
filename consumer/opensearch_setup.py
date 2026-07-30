@@ -87,11 +87,35 @@ ISM_POLICY = {
 }
 
 
+# 쿨다운 상태 전용 인덱스. weather-alert-* 패턴에 넣으면 ISM 90일 삭제와
+# 이력용 매핑이 함께 걸리므로 이름을 분리한다. 지역당 문서 1개라 크기가 없다.
+STATE_INDEX = "weather-cooldown-state"
+
+STATE_TEMPLATE = {
+    "index_patterns": [STATE_INDEX],
+    "template": {
+        "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+        "mappings": {
+            "properties": {
+                "region": {"type": "keyword"},
+                "grade_signature": {"type": "keyword"},
+                "last_external_send_at": {"type": "date"},
+                "updated_at": {"type": "date"},
+            }
+        },
+    },
+    "priority": 100,
+}
+
+
 def ensure_index_template(client) -> bool:
     """인덱스 템플릿을 적용한다. 실패해도 알림 처리를 막지 않는다."""
     try:
         client.indices.put_index_template(name=TEMPLATE_NAME, body=INDEX_TEMPLATE)
-        logger.info(f"OpenSearch 인덱스 템플릿 적용: {TEMPLATE_NAME}")
+        client.indices.put_index_template(
+            name=f"{STATE_INDEX}-template", body=STATE_TEMPLATE
+        )
+        logger.info(f"OpenSearch 인덱스 템플릿 적용: {TEMPLATE_NAME}, {STATE_INDEX}")
         return True
     except Exception as e:
         logger.warning(f"인덱스 템플릿 적용 실패(동적 매핑으로 진행): {str(e)}")

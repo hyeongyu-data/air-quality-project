@@ -355,6 +355,13 @@ class WeatherAlertConsumer:
         # 데이터 프로세서
         self.processor = WeatherDataProcessor()
 
+        # 등급이 같아도 이 시간(초)이 지나면 재발송한다. 0이면 끈다.
+        # 조용한 것이 정상(쿨다운)인지 고장(파이프라인 정지)인지 사용자가
+        # 구분할 수 있게 하는 최소 장치다.
+        self.max_silence_seconds = float(
+            os.getenv("MAX_SILENCE_HOURS", "12")
+        ) * 3600
+
         # 루프 제어 / 생존 신호
         self._running = False
         self.heartbeat_path = Path(
@@ -418,12 +425,22 @@ class WeatherAlertConsumer:
 
             current_signature = grade_signature(classification_objects)
             processed["grade_signature"] = current_signature
-            previous_signature = self.alert_manager.opensearch_sender.latest_signature(
+            state = self.alert_manager.opensearch_sender.cooldown_state(
                 processed.get("region", "전국")
             )
-            send_external = should_send(previous_signature, current_signature) and not core_missing
+            send_external = should_send(
+                state.get("grade_signature"),
+                current_signature,
+                last_sent_at=state.get("last_external_send_at"),
+                max_silence_seconds=self.max_silence_seconds,
+            ) and not core_missing
             if not send_external:
                 logger.info(f"등급 무변경 → 외부 채널 발송 생략 (시그니처={current_signature})")
+            elif state.get("grade_signature") == current_signature:
+                logger.info(
+                    "등급은 같지만 최대 무발송 간격 초과 → 재발송 "
+                    f"(마지막 발송 {state.get('last_external_send_at')})"
+                )
 
             # 알림 발송 (등급 무변경 시 콘솔/OpenSearch 이력은 유지, 외부만 생략)
             results = self.alert_manager.send_all(processed, send_external=send_external)

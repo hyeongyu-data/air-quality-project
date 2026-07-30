@@ -56,7 +56,10 @@ def test_index_name_is_monthly(sender):
 
 def test_successful_send_caches_signature(sender):
     sender.send(dict(DOC))
-    assert json.loads(sender.state_path.read_text(encoding="utf-8")) == {"서울": "pm10=나쁨"}
+    cache = json.loads(sender.state_path.read_text(encoding="utf-8"))
+    # #42에서 캐시가 dict 형식으로 확장됐다(발송 시각 동반). 옛 str 형식은
+    # 읽기 호환만 유지한다 — test_cooldown_state.py 참고.
+    assert cache["서울"]["grade_signature"] == "pm10=나쁨"
 
 
 def test_unrecorded_signature_is_not_cached(sender):
