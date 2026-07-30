@@ -23,6 +23,8 @@ ENV PYTHONUNBUFFERED=1 \
 # 시스템 패키지 업데이트 및 필수 도구 설치
 # ============================================================================
 
+# 데비안 포인트 릴리스마다 깨지는 apt 버전 핀은 얻는 것보다 잃는 게 많다
+# hadolint ignore=DL3008
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
@@ -37,8 +39,9 @@ RUN apt-get update && \
 COPY requirements-consumer.txt .
 
 # 2단계: 의존성 설치
-RUN pip install --upgrade pip setuptools && \
-    pip install --no-cache-dir -r requirements-consumer.txt
+# 베이스 이미지의 pip를 그대로 쓴다. 무버전 upgrade는 빌드 시점마다
+# 결과가 달라져 재현성을 깨는 쪽이었다(DL3013).
+RUN pip install --no-cache-dir -r requirements-consumer.txt
 
 # ============================================================================
 # 애플리케이션 코드 복사

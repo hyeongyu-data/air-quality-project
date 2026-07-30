@@ -21,7 +21,6 @@ producer.collect_scheduled_weather()가 이 네 시각에만 분기를 정의한
 
 from datetime import datetime, timedelta
 import os
-import json
 import logging
 from typing import Dict
 import pendulum
@@ -135,8 +134,9 @@ def validate_environment(**context) -> Dict:
     
     # 의존성 패키지 확인
     try:
-        import requests
-        import kafka
+        # 의도적 미사용 import — 패키지 존재 검증이 목적이다
+        import requests  # noqa: F401
+        import kafka  # noqa: F401
         logger.info("✅ 모든 필수 패키지 설치됨")
     except ImportError as e:
         logger.error(f"패키지 설치 누락: {str(e)}")

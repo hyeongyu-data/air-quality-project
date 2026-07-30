@@ -10,9 +10,9 @@ from datetime import datetime
 from typing import Dict, Optional
 
 try:
-    from .timeutil import KST, now_kst, to_kst
+    from .timeutil import now_kst, to_kst
 except ImportError:  # 직접 실행 / pythonpath 경유
-    from timeutil import KST, now_kst, to_kst
+    from timeutil import now_kst, to_kst
 
 # 알림 판정에 실제로 쓰이는 수치 지수
 NUMERIC_INDEX_KEYS = (
