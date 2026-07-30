@@ -151,28 +151,28 @@ def test_station_average_all_missing_is_none():
 
 def test_latest_index_time_waits_for_delay(monkeypatch):
     """06시 발표 + 지연 30분 규약: 06:10에는 아직 전날 18시 발표분을 쓴다."""
-    import producer.producer as pp
+    import producer.clients.kma_index as kma_index
 
     fixed = datetime(2026, 7, 30, 6, 10, tzinfo=KST)
-    monkeypatch.setattr(pp, "now_kst", lambda: fixed)
+    monkeypatch.setattr(kma_index, "now_kst", lambda: fixed)
     assert WeatherAPIClient._latest_index_time() == "2026072918"
 
     fixed2 = datetime(2026, 7, 30, 6, 40, tzinfo=KST)
-    monkeypatch.setattr(pp, "now_kst", lambda: fixed2)
+    monkeypatch.setattr(kma_index, "now_kst", lambda: fixed2)
     assert WeatherAPIClient._latest_index_time() == "2026073006"
 
 
 def test_latest_base_datetime_respects_delay(monkeypatch):
-    import producer.producer as pp
+    import producer.clients.kma_forecast as kma_forecast
 
     fixed = datetime(2026, 7, 30, 2, 5, tzinfo=KST)   # 02시 발표 + 지연 10분 전
-    monkeypatch.setattr(pp, "now_kst", lambda: fixed)
+    monkeypatch.setattr(kma_forecast, "now_kst", lambda: fixed)
     client = KMAForecastAPIClient.__new__(KMAForecastAPIClient)
     base = client._latest_base_datetime([2, 5, 8, 11, 14, 17, 20, 23], 10)
     assert base.strftime("%Y%m%d%H") == "2026072923"
 
     fixed2 = datetime(2026, 7, 30, 2, 15, tzinfo=KST)
-    monkeypatch.setattr(pp, "now_kst", lambda: fixed2)
+    monkeypatch.setattr(kma_forecast, "now_kst", lambda: fixed2)
     assert client._latest_base_datetime(
         [2, 5, 8, 11, 14, 17, 20, 23], 10
     ).strftime("%Y%m%d%H") == "2026073002"
