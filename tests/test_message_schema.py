@@ -15,7 +15,6 @@ pytest.importorskip("kafka")
 pytest.importorskip("opensearchpy")
 
 import producer.contract as producer_contract  # noqa: E402
-from consumer import consumer as consumer_mod  # noqa: E402
 from consumer.consumer import WeatherAlertConsumer  # noqa: E402
 from consumer.schema import (  # noqa: E402
     REQUIRED_KEYS,
