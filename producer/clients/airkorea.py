@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from ..api_common import BasePublicDataClient
+from ..api_common import BasePublicDataClient, timed_get
 from ..masking import mask_secrets
 from ..timeutil import now_kst
 
@@ -56,7 +56,7 @@ class AirKoreaAPIClient(BasePublicDataClient):
         response = None
         for attempt in range(2):
             try:
-                response = requests.get(url, params=base_params, timeout=self.timeout)
+                response = timed_get("airkorea", url, params=base_params, timeout=self.timeout)
                 break
             except requests.exceptions.RequestException as e:
                 self.last_error = mask_secrets(f"{service_name} 연결 실패: {str(e)}")

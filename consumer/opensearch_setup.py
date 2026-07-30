@@ -66,6 +66,33 @@ INDEX_TEMPLATE = {
     "priority": 100,
 }
 
+METRICS_INDEX_PATTERN = "weather-metrics-*"
+
+METRICS_TEMPLATE = {
+    "index_patterns": [METRICS_INDEX_PATTERN],
+    "template": {
+        "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+        "mappings": {
+            "properties": {
+                "timestamp": {"type": "date"},
+                "event_id": {"type": "keyword"},
+                "region": {"type": "keyword"},
+                "process_duration_ms": {"type": "float"},
+                "e2e_latency_seconds": {"type": "float"},
+                "external_attempted": {"type": "boolean"},
+                "delivered_channels": {"type": "keyword"},
+                "delivery_failed": {"type": "boolean"},
+                "suppressed": {"type": "boolean"},
+                "missing_indices": {"type": "keyword"},
+                "missing_count": {"type": "integer"},
+                "alert_severity": {"type": "keyword"},
+                "opensearch_indexed": {"type": "boolean"},
+            }
+        },
+    },
+    "priority": 100,
+}
+
 # 월 단위 인덱스라 삭제 기준도 월 단위로 잡는다. 30일로 두면 이번 달 인덱스가
 # 생성 30일 뒤에 사라져 사용 중인 데이터를 지운다.
 ISM_POLICY = {
@@ -82,7 +109,7 @@ ISM_POLICY = {
             },
             {"name": "delete", "actions": [{"delete": {}}], "transitions": []},
         ],
-        "ism_template": [{"index_patterns": [INDEX_PATTERN], "priority": 100}],
+        "ism_template": [{"index_patterns": [INDEX_PATTERN, METRICS_INDEX_PATTERN], "priority": 100}],
     }
 }
 
@@ -114,6 +141,9 @@ def ensure_index_template(client) -> bool:
         client.indices.put_index_template(name=TEMPLATE_NAME, body=INDEX_TEMPLATE)
         client.indices.put_index_template(
             name=f"{STATE_INDEX}-template", body=STATE_TEMPLATE
+        )
+        client.indices.put_index_template(
+            name="weather-metrics-template", body=METRICS_TEMPLATE
         )
         logger.info(f"OpenSearch 인덱스 템플릿 적용: {TEMPLATE_NAME}, {STATE_INDEX}")
         return True

@@ -5,8 +5,36 @@
 기본값을 None으로 통일한다 — 0이 필요한 곳은 호출부가 명시적으로 넘긴다.
 """
 
+import logging
+import time
 import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional
+
+import requests
+
+logger = logging.getLogger(__name__)
+
+
+def timed_get(api_name: str, url: str, **kwargs):
+    """requests.get + 소요시간·상태 구조화 로그.
+
+    API별 응답시간·실패율은 알람 기준(관측 문서)의 입력이다. Airflow 태스크
+    로그에 남으므로 별도 수집기 없이도 grep으로 집계할 수 있다.
+    """
+    started = time.monotonic()
+    try:
+        response = requests.get(url, **kwargs)
+        logger.info(
+            "api_call api=%s status=%s duration_ms=%.0f",
+            api_name, response.status_code, (time.monotonic() - started) * 1000,
+        )
+        return response
+    except Exception:
+        logger.warning(
+            "api_call api=%s status=EXC duration_ms=%.0f",
+            api_name, (time.monotonic() - started) * 1000,
+        )
+        raise
 
 
 class BasePublicDataClient:

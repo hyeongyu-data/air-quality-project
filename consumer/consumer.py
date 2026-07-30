@@ -21,8 +21,10 @@ from opensearchpy import OpenSearch
 from dotenv import load_dotenv
 
 # 상대 import
-try:
+try:  # noqa: SIM105
     from . import opensearch_setup
+    from .logutil import current_event_id, setup_logging
+    from .metrics import MetricsSink, build_message_metrics
     from .schema import InvalidMessage, parse_message
     from .rules import (
         AlertRuleEngine, AlertGrouping,
@@ -32,6 +34,8 @@ try:
 except ImportError:
     # 직접 실행 시
     import opensearch_setup
+    from logutil import current_event_id, setup_logging
+    from metrics import MetricsSink, build_message_metrics
     from schema import InvalidMessage, parse_message
     from rules import (
         AlertRuleEngine, AlertGrouping, grade_signature, should_send, core_indices_unknown,
@@ -41,11 +45,9 @@ except ImportError:
 # 환경변수 로드
 load_dotenv()
 
-# 로깅 설정
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+# LOG_FORMAT=json이면 구조화 로그. 필드 단위 집계가 가능해진다.
+setup_logging()
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -360,6 +362,9 @@ class WeatherAlertConsumer:
         self.alert_manager = AlertManager(
             opensearch_client=self.opensearch_connector.client
         )
+
+        # 처리 메트릭 (OpenSearch weather-metrics-*, best-effort)
+        self.metrics = MetricsSink(self.opensearch_connector.client)
         
         # 데이터 프로세서
         self.processor = WeatherDataProcessor()
@@ -401,6 +406,9 @@ class WeatherAlertConsumer:
         Returns:
             bool: 처리 성공 여부
         """
+        started = time.monotonic()
+        # 이 메시지를 처리하는 동안 찍히는 모든 로그에 event_id가 붙는다.
+        token = current_event_id.set(message.get("event_id") if message else None)
         try:
             if not message:
                 return False
@@ -466,7 +474,22 @@ class WeatherAlertConsumer:
             if any(results.get(channel) for channel in ("slack", "email", "kakao")):
                 self.stats["total_alerts_sent"] += 1
             
-            logger.info(f"메시지 처리 완료: {processed.get('region')}")
+            duration_ms = (time.monotonic() - started) * 1000
+            processed["alert_severity"] = (
+                self.alert_manager.opensearch_sender._calculate_severity(processed)
+            )
+            self.metrics.emit(build_message_metrics(
+                processed, results, send_external, duration_ms
+            ))
+            logger.info(
+                "메시지 처리 완료: %s",
+                processed.get("region"),
+                extra={
+                    "metric_duration_ms": round(duration_ms, 1),
+                    "metric_delivered": [c for c in ("slack", "email", "kakao") if results.get(c)],
+                    "metric_suppressed": not send_external,
+                },
+            )
             return True
 
         except Exception:
@@ -474,6 +497,8 @@ class WeatherAlertConsumer:
             # 실패 메시지가 커밋되어 조용히 유실된다(예전 동작).
             self.stats["errors"] += 1
             raise
+        finally:
+            current_event_id.reset(token)
     
     def _send_to_dlq(self, record, reason: str) -> bool:
         """처리 불가 메시지를 DLQ 토픽으로 격리한다.
@@ -528,6 +553,7 @@ class WeatherAlertConsumer:
         self.kafka_consumer.ensure_connection()
         if self.opensearch_connector.ensure_connection():
             self.alert_manager.opensearch_sender.attach(self.opensearch_connector.client)
+            self.metrics.attach(self.opensearch_connector.client)
 
         records = self.kafka_consumer.consume_batch(timeout_ms=5000)
         if not records:

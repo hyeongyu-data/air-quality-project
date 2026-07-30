@@ -259,6 +259,10 @@ docker exec pj-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 - 기상청 API의 발표시각(`base_time`)도 KST aware로 변환해 비교합니다.
 - 두 `timeutil.py`는 같은 내용입니다. Consumer 이미지는 `consumer/`만 포함하므로 producer 쪽을 import 할 수 없습니다. 한쪽을 고치면 다른 쪽도 함께 고칩니다.
 
+## 관측성
+
+처리 메트릭(전달 여부·지연·결측)은 메시지당 1건씩 `weather-metrics-*` 인덱스에 남고, Consumer 로그는 `LOG_FORMAT=json`으로 구조화되며 처리 중 모든 로그에 `event_id`가 붙습니다. 메트릭 사전·알람 기준 8종·실측 수치는 [docs/observability.md](docs/observability.md)에 있습니다.
+
 ## 전달 보장
 
 오프셋은 **처리(판정·저장·발송 시도)가 끝난 뒤에만 커밋**합니다(at-least-once). 자동 커밋은 처리 실패 메시지를 조용히 유실했습니다. 재처리로 생기는 중복은 `event_id` upsert와 등급 시그니처 쿨다운이 흡수합니다.
