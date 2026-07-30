@@ -128,6 +128,7 @@ docker compose ps
 | --- | --- | --- |
 | Airflow | http://localhost:8080 | `airflow` / `airflow` |
 | Kafka UI | http://localhost:8081 | 없음 |
+| OpenSearch Dashboards | http://localhost:5601 (`--profile ops`) | 없음 |
 | OpenSearch | http://localhost:9200 | 없음 |
 
 Airflow 계정은 컨테이너 시작 시 자동 생성되며, 이미 존재하면 비밀번호를 `airflow`로 재설정합니다.

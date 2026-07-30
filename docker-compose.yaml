@@ -334,6 +334,29 @@ services:
   # ============================================================================
   # Kafka UI: Kafka 모니터링 (선택사항)
   # ============================================================================
+  # ==========================================================================
+  # OpenSearch Dashboards: 운영 관측 (판정 이력·처리 메트릭 시각화)
+  # 상시 필요하진 않아 profile로 분리 — docker compose --profile ops up -d
+  # ==========================================================================
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:2.8.0
+    container_name: pj-osd
+    profiles:
+      - ops
+    ports:
+      - "5601:5601"
+    environment:
+      OPENSEARCH_HOSTS: '["http://opensearch:9200"]'
+      # 로컬 개발용 — OpenSearch 본체와 동일하게 보안 플러그인 비활성.
+      # 운영 인증·접근 제어는 #20(운영 보안 프로필)에서 다룬다.
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: 'true'
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - weather-network
+    restart: unless-stopped
+
   kafka-ui:
     # latest는 어느 날 다른 이미지가 된다. 마지막 릴리스 태그로 고정.
     image: provectuslabs/kafka-ui:v0.7.2

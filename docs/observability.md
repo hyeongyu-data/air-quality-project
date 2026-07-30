@@ -31,6 +31,29 @@ curl -s "localhost:9200/weather-metrics-*/_search?q=delivery_failed:true&size=10
 docker compose exec airflow sh -c "grep -h api_call /opt/airflow/logs -r" | tail -20
 ```
 
+## 시각화 — OpenSearch Dashboards
+
+상시 필요하진 않아 `ops` 프로필로 분리돼 있습니다.
+
+```bash
+docker compose --profile ops up -d      # http://localhost:5601
+./scripts/setup_dashboards.sh           # 인덱스 패턴 3종 생성(멱등)
+```
+
+도구 선택 근거 — **Grafana가 아니라 OpenSearch Dashboards**인 이유: 데이터가 이미 OpenSearch에 있어 데이터소스 설정·쿼리 변환 없이 바로 보이고, 이미지 버전을 본체(2.8.0)와 맞춰 호환성 변수를 없앱니다. 관리 UI 접근 제어는 로컬 개발 한정으로 보안 플러그인을 끈 상태이며, 운영 인증은 #20에서 다룹니다.
+
+Discover에서 자주 쓰는 필터:
+
+| 보고 싶은 것 | 인덱스 패턴 | 필터 |
+| --- | --- | --- |
+| 전달 실패 | `weather-metrics-*` | `delivery_failed: true` |
+| 결측 발생 | `weather-metrics-*` | `missing_count > 0` |
+| 억제(쿨다운) 비율 | `weather-metrics-*` | `suppressed: true` |
+| 등급별 알림 이력 | `weather-alert-*` | `alert_severity: HIGH` 등 |
+| 쿨다운 현재 상태 | `weather-cooldown-state` | — (지역당 1문서) |
+
+Kafka 토픽·랙 확인은 기존 Kafka UI(8081)를 그대로 씁니다.
+
 ## 알람 기준
 
 판정 쿼리는 전부 위 메트릭 문서로 계산됩니다. 알림 발송 도구(예: OpenSearch Dashboards 알림, cron+curl)는 #24에서 결정합니다 — 여기는 **기준의 단일 출처**입니다.
