@@ -1,0 +1,22 @@
+{
+  "response": {
+    "header": {"resultCode": "00", "resultMsg": "NORMAL_SERVICE"},
+    "body": {
+      "items": {
+        "item": [
+          {
+            "code": "A07_1",
+            "areaNo": "1100000000",
+            "date": "2026073006",
+            "h0": "1",
+            "h3": "5",
+            "h6": "8",
+            "h9": "3",
+            "h12": "-",
+            "h15": ""
+          }
+        ]
+      }
+    }
+  }
+}

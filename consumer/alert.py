@@ -962,17 +962,18 @@ class OpenSearchAlertSender:
         """
         action_groups = alert_data.get("action_groups", {})
         
-        if action_groups.get("외출_자제"):
+        # 그룹의 존재 여부로 판정한다. .get()의 truthy 검사는 값이 빈 dict일 때
+        # 활성화된 그룹을 없는 것으로 취급하는 잠재 결함이 있었다.
+        if "외출_자제" in action_groups:
             return "CRITICAL"
-        elif action_groups.get("마스크_필수") or action_groups.get("특보_확인"):
+        if "마스크_필수" in action_groups or "특보_확인" in action_groups:
             return "HIGH"
-        elif (action_groups.get("자외선_차단") or action_groups.get("보온_필수") or
-              action_groups.get("알레르기_주의") or action_groups.get("우산_준비")):
+        if any(g in action_groups for g in
+               ("자외선_차단", "보온_필수", "알레르기_주의", "우산_준비")):
             return "MEDIUM"
-        elif action_groups.get("정상"):
+        if "정상" in action_groups:
             return "LOW"
-        else:
-            return "MEDIUM"
+        return "MEDIUM"
 
 
 class AlertManager:
