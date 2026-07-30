@@ -351,6 +351,12 @@ docker compose exec airflow airflow users reset-password --username airflow --pa
 
 예전에는 권한이 없을 때 PM10 평균을 황사 대체값으로 썼습니다. 그런데 황사 판정의 "좋음" 임계가 150㎍/㎥라 서울 PM10 평균으로는 사실상 항상 "좋음"이 나왔습니다. **감시되는 것처럼 보이지만 실제로는 아무것도 감시하지 않는 지표**였기 때문에 제거했습니다. 모른다를 괜찮다로 바꾸지 않는다는 원칙은 다른 지수와 같습니다.
 
+### Airflow 메타DB
+
+메타DB(SQLite)는 홈 볼륨 `airflow_home`에 있어 컨테이너를 재생성해도 DAG on/off 상태와 실행 이력이 유지됩니다. 초기화하려면 `docker compose down -v`로 볼륨까지 지웁니다.
+
+이 규모(하루 4회, 선형 4태스크)에서는 SQLite + SequentialExecutor로 충분합니다. DAG 수가 늘거나 병렬 실행이 필요해지면 PostgreSQL + LocalExecutor로 전환합니다 — compose에 postgres 서비스를 추가하고 `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN`을 교체하면 됩니다.
+
 ### Airflow LocalExecutor/SQLite 오류
 
 로컬 compose는 SQLite와 호환되는 `SequentialExecutor`를 사용합니다. `LocalExecutor`로 바꾸려면 Airflow 메타DB를 PostgreSQL 등으로 교체해야 합니다.

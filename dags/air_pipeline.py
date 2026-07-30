@@ -88,7 +88,7 @@ dag = DAG(
     dag_id=DAG_ID,
     default_args=DEFAULT_ARGS,
     description="6시간마다(KST 00·06·12·18시) 기상지수 수집 및 Kafka 발행",
-    schedule_interval="0 */6 * * *",
+    schedule="0 */6 * * *",
     start_date=datetime(2026, 1, 1, tzinfo=local_tz),
     catchup=False,
     tags=["weather", "realtime", "alert"],
@@ -137,19 +137,18 @@ def validate_environment(**context) -> Dict:
     try:
         import requests
         import kafka
-        from opensearchpy import OpenSearch
         logger.info("✅ 모든 필수 패키지 설치됨")
     except ImportError as e:
         logger.error(f"패키지 설치 누락: {str(e)}")
         raise AirflowException(f"Missing package: {str(e)}")
     
-    # 현재 시간 정보
-    execution_date = context["execution_date"]
-    logger.info(f"실행 시간: {execution_date.isoformat()}")
+    # 현재 시간 정보 (execution_date는 Airflow 3에서 제거됨)
+    logical_date = context["logical_date"]
+    logger.info(f"실행 시간: {logical_date.isoformat()}")
     
     return {
         "status": "success",
-        "timestamp": execution_date.isoformat(),
+        "timestamp": logical_date.isoformat(),
         "message": "환경변수 및 의존성 검증 완료"
     }
 
@@ -199,6 +198,10 @@ def fetch_current_weather_data(**context) -> Dict:
         # 스케줄 슬롯 기준 결정적 키. 태스크가 재시도돼도 같은 값이라
         # 중복 발행·중복 색인이 하류에서 걸러진다.
         current_weather["event_id"] = build_event_id("서울", run_dt)
+
+        # 원본 API 응답 묶음은 XCom(메타DB)과 Kafka 페이로드 양쪽에 실리는데,
+        # 하류 어디에서도 소비되지 않는다(판정은 최상위 필드로만 한다).
+        current_weather.pop("source_details", None)
 
         collected = collected_index_count(current_weather)
         missing = missing_index_keys(current_weather)
@@ -293,15 +296,14 @@ def notify_completion(**context) -> Dict:
     """
     DAG 실행 완료 알림
     """
-    execution_date = context["execution_date"]
+    logical_date = context["logical_date"]
     logger.info("=" * 80)
-    logger.info(f"✅ DAG 실행 완료 ({execution_date.isoformat()})")
+    logger.info(f"✅ DAG 실행 완료 ({logical_date.isoformat()})")
     logger.info("=" * 80)
-    logger.info("다음 실행: 1시간 후")
     
     return {
         "status": "completed",
-        "execution_date": execution_date.isoformat()
+        "logical_date": logical_date.isoformat()
     }
 
 
@@ -313,7 +315,6 @@ def notify_completion(**context) -> Dict:
 task_validate_env = PythonOperator(
     task_id="validate_environment",
     python_callable=validate_environment,
-    provide_context=True,
     dag=dag
 )
 
@@ -321,7 +322,6 @@ task_validate_env = PythonOperator(
 task_fetch_current = PythonOperator(
     task_id="fetch_current_weather",
     python_callable=fetch_current_weather_data,
-    provide_context=True,
     dag=dag
 )
 
@@ -329,7 +329,6 @@ task_fetch_current = PythonOperator(
 task_publish_kafka = PythonOperator(
     task_id="publish_to_kafka",
     python_callable=publish_to_kafka,
-    provide_context=True,
     dag=dag
 )
 
@@ -337,7 +336,6 @@ task_publish_kafka = PythonOperator(
 task_notify = PythonOperator(
     task_id="notify_completion",
     python_callable=notify_completion,
-    provide_context=True,
     dag=dag
 )
 
