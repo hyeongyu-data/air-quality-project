@@ -12,7 +12,9 @@ Kafka 토픽에서 메시지를 구독하여:
 import os
 import json
 import logging
+import signal
 import time
+from pathlib import Path
 from typing import Dict, Optional, List
 from datetime import datetime
 from kafka import KafkaConsumer
@@ -225,8 +227,15 @@ class WeatherDataProcessor:
     
 
 class KafkaWeatherConsumer:
-    """Kafka 컨슈머"""
-    
+    """Kafka 컨슈머.
+
+    기동 시 브로커가 없으면 consumer=None으로 고정되던 구조를 고쳤다.
+    그 상태로는 다음 재시작 전까지 아무것도 소비하지 못한다. 재연결을
+    시도하되 지수 백오프로 폭주하지 않게 한다.
+    """
+
+    MAX_RETRY_INTERVAL_SECONDS = 300
+
     def __init__(
         self,
         bootstrap_servers: str = None,
@@ -249,7 +258,13 @@ class KafkaWeatherConsumer:
         self.group_id = group_id
         self.topics = topics or ["seoul-weather"]
         self.opensearch_client = opensearch_client
-        
+        self.consumer = None
+        self._next_retry_at = 0.0
+        self._retry_interval = 5.0
+        self.connect()
+
+    def connect(self) -> bool:
+        """브로커 연결을 시도한다."""
         try:
             self.consumer = KafkaConsumer(
                 *self.topics,
@@ -263,11 +278,27 @@ class KafkaWeatherConsumer:
                 enable_auto_commit=True,
                 max_poll_records=1
             )
+            self._retry_interval = 5.0
             logger.info(f"Kafka 컨슈머 초기화 성공: {self.bootstrap_servers}")
-            
+            return True
         except Exception as e:
-            logger.error(f"Kafka 컨슈머 초기화 실패: {str(e)}")
             self.consumer = None
+            self._next_retry_at = time.time() + self._retry_interval
+            logger.error(
+                f"Kafka 컨슈머 초기화 실패({self._retry_interval:.0f}초 뒤 재시도): {str(e)}"
+            )
+            self._retry_interval = min(
+                self._retry_interval * 2, self.MAX_RETRY_INTERVAL_SECONDS
+            )
+            return False
+
+    def ensure_connection(self) -> bool:
+        """끊겨 있으면 백오프 간격이 지난 뒤 다시 연결을 시도한다."""
+        if self.consumer is not None:
+            return True
+        if time.time() < self._next_retry_at:
+            return False
+        return self.connect()
     
     def consume_messages(self, timeout_ms: int = 5000) -> Optional[Dict]:
         """
@@ -323,6 +354,12 @@ class WeatherAlertConsumer:
         
         # 데이터 프로세서
         self.processor = WeatherDataProcessor()
+
+        # 루프 제어 / 생존 신호
+        self._running = False
+        self.heartbeat_path = Path(
+            os.getenv("CONSUMER_HEARTBEAT_PATH", "/tmp/consumer-heartbeat")
+        )
         
         # 통계
         self.stats = {
@@ -406,13 +443,13 @@ class WeatherAlertConsumer:
     
     def run_once(self) -> bool:
         """
-        한 번의 메시지 처리 실행
-        (Airflow task 호출용)
+        한 번의 폴링·처리 사이클
         
         Returns:
             bool: 메시지 처리 여부
         """
         # 끊긴 상태로 굳지 않도록 폴링마다 재연결 기회를 준다(백오프 적용).
+        self.kafka_consumer.ensure_connection()
         if self.opensearch_connector.ensure_connection():
             self.alert_manager.opensearch_sender.attach(self.opensearch_connector.client)
 
@@ -423,34 +460,57 @@ class WeatherAlertConsumer:
         else:
             logger.debug("대기 중인 메시지 없음")
             return False
-    
-    def run_continuous(self, duration_seconds: int = 3600, poll_interval: int = 10):
+
+    def _handle_signal(self, signum, frame) -> None:
+        """SIGTERM/SIGINT를 받으면 루프를 빠져나가 정상 종료한다."""
+        logger.info(f"종료 시그널 수신({signum}) → 정리 후 종료")
+        self._running = False
+
+    def _sleep(self, seconds: int) -> None:
+        """1초 단위로 쪼개 자면서 종료 시그널에 바로 반응한다.
+
+        통짜로 자면 docker stop의 유예시간(기본 10초) 안에 못 깨어나
+        SIGKILL을 맞고, 처리 중이던 메시지의 정리가 생략된다.
         """
-        지속적인 메시지 처리 (배경 프로세스)
-        
-        Args:
-            duration_seconds: 실행 시간 (기본값: 1시간)
-            poll_interval: 폴링 간격 (초)
-        """
-        start_time = time.time()
-        
-        logger.info(f"컨슈머 시작: {duration_seconds}초 동안 실행")
-        logger.info(f"구독 토픽: {self.kafka_consumer.topics}")
-        
+        for _ in range(seconds):
+            if not self._running:
+                return
+            time.sleep(1)
+
+    def _touch_heartbeat(self) -> None:
+        """루프 생존 신호. compose healthcheck가 이 파일의 나이를 본다."""
         try:
-            while time.time() - start_time < duration_seconds:
+            self.heartbeat_path.touch()
+        except OSError as e:
+            logger.warning(f"하트비트 기록 실패: {str(e)}")
+
+    def run_forever(self, poll_interval: int = 10):
+        """메시지 처리 루프 (Docker 진입점).
+
+        예전에는 duration_seconds=3600으로 1시간마다 스스로 종료하고
+        restart 정책으로 부활했다. 로그에서 정상 종료와 크래시 루프가
+        구분되지 않았고, 재시작 시점의 연결 실패가 1시간 동안 고정됐다.
+        수명 관리는 컨테이너 오케스트레이터의 일이다.
+
+        처리량 상한: max_poll_records=1 + poll_interval sleep이라
+        초당 약 1/poll_interval 건이다. 하루 4건 워크로드에는 충분하다.
+        """
+        self._running = True
+        signal.signal(signal.SIGTERM, self._handle_signal)
+        signal.signal(signal.SIGINT, self._handle_signal)
+
+        logger.info(f"컨슈머 시작 (폴링 간격 {poll_interval}초)")
+        logger.info(f"구독 토픽: {self.kafka_consumer.topics}")
+
+        try:
+            while self._running:
                 try:
                     self.run_once()
-                    time.sleep(poll_interval)
-                    
-                except KeyboardInterrupt:
-                    logger.info("사용자 중단")
-                    break
+                    self._touch_heartbeat()
                 except Exception as e:
                     logger.error(f"실행 중 오류: {str(e)}")
                     self.stats["errors"] += 1
-                    time.sleep(poll_interval)
-        
+                self._sleep(poll_interval)
         finally:
             self._shutdown()
     
@@ -483,9 +543,7 @@ def main():
     Docker에서 실행될 진입점
     """
     consumer = WeatherAlertConsumer()
-    
-    # 1시간 동안 지속적으로 메시지 처리
-    consumer.run_continuous(duration_seconds=3600, poll_interval=10)
+    consumer.run_forever(poll_interval=10)
 
 
 if __name__ == "__main__":
