@@ -154,10 +154,12 @@ section{margin-top:52px}
   display:grid; grid-template-columns:20px minmax(0,1fr); gap:10px;
   font-size:14px; color:var(--ink-2);
 }
-.checks li::before{content:"✔"; color:var(--good); font-weight:700; line-height:1.5}
+.checks li::before{content:"✔"; color:var(--good); font-weight:700; line-height:1.5; grid-row:1 / span 2}
 .checks li.todo::before{content:"○"; color:var(--warn)}
-.checks b{color:var(--ink); font-weight:600}
-.checks .how{display:block; font-size:12.5px; color:var(--ink-3)}
+.checks b{color:var(--ink); font-weight:600; grid-column:2}
+/* 제목(b)과 설명(.how)은 둘 다 2열에 — 1열은 체크마크 전용.
+   지정하지 않으면 .how가 20px 체크 컬럼에 끼어 세로로 뭉개진다. */
+.checks .how{display:block; font-size:12.5px; color:var(--ink-3); grid-column:2}
 
 /* table */
 .scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--panel); box-shadow:var(--shadow); max-width:100%}
