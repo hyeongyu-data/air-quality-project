@@ -327,6 +327,8 @@ curl http://localhost:9200/_cat/indices?v
 
 ## 문제 해결
 
+빠른 해결법은 아래 항목을, 문제를 어떻게 찾고 고쳤는지의 전체 과정(가설 → 검증 → 원인 → 재발 방지)은 [트러블슈팅 기록](docs/troubleshooting.md)을 보세요.
+
 ### Airflow 로그인이 안 될 때
 
 현재 기본 계정은 `airflow` / `airflow`입니다. 그래도 안 되면 계정을 직접 재설정합니다.
