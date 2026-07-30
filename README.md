@@ -4,7 +4,7 @@
 
 ## 프로젝트 현황
 
-- 진단·결함 인벤토리·개선 순서 한눈에 보기: [docs/dashboard.html](docs/dashboard.html)
+- 프로젝트 소개 대시보드(아키텍처·설계 하이라이트·기술 선택 근거): [docs/dashboard.html](docs/dashboard.html)
 - 운영 리스크와 개선 방안(코드 근거 포함): [docs/operational-risks.md](docs/operational-risks.md)
 - 아키텍처 결정 기록: [docs/adr/](docs/adr/) — 메달리언 제거(0001) · 왜 Kafka인가(0002) · 왜 OpenSearch인가(0003) · 왜 규칙 엔진인가(0004) · AWS 이전 경로(0005)
 
