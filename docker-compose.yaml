@@ -217,6 +217,8 @@ services:
       OPENSEARCH_HOST: opensearch
       OPENSEARCH_PORT: 9200
       LOG_LEVEL: INFO
+      # 구조화 로그 — 필드 단위 집계용. 로컬 가독성이 필요하면 text로.
+      LOG_FORMAT: json
       # 코드가 KST를 명시하므로 동작은 이 값에 의존하지 않는다.
       # 로그 타임스탬프를 Airflow 컨테이너와 맞추기 위한 설정이다.
       TZ: Asia/Seoul

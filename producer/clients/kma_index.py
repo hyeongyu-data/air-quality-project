@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 import requests
 
-from ..api_common import BasePublicDataClient
+from ..api_common import BasePublicDataClient, timed_get
 from ..masking import mask_secrets
 from ..timeutil import now_kst, to_kst
 
@@ -61,7 +61,7 @@ class WeatherAPIClient(BasePublicDataClient):
         if extra_params:
             params.update(extra_params)
         
-        response = requests.get(url, params=params, timeout=self.timeout)
+        response = timed_get("kma_index", url, params=params, timeout=self.timeout)
         if response.status_code >= 400:
             self.last_error = mask_secrets(f"{response.status_code} {response.text[:120]}")
             logger.warning(f"기상청 API 응답 오류: {self.last_error}")
