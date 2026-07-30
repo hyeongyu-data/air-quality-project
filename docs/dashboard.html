@@ -41,17 +41,17 @@
   --shadow:0 1px 2px rgba(17,24,25,.05), 0 8px 24px -16px rgba(17,24,25,.25);
 }
 
-*{box-sizing:border-box}
+*{box-sizing:border-box; min-width:0}
 body{
   margin:0; background:var(--ground); color:var(--ink);
   font-family:var(--f-sans); font-size:15px; line-height:1.65;
   -webkit-font-smoothing:antialiased;
 }
-.wrap{max-width:1120px; margin:0 auto; padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px) 96px}
+.wrap{max-width:1080px; margin:0 auto; padding:clamp(20px,4vw,56px) clamp(16px,4vw,40px) 96px}
 
 h1,h2,h3{text-wrap:balance; margin:0; letter-spacing:-.02em; font-weight:700}
-h1{font-size:clamp(26px,4.2vw,40px); line-height:1.2}
-h2{font-size:clamp(18px,2.4vw,23px); line-height:1.3}
+h1{font-size:clamp(26px,4.2vw,38px); line-height:1.2}
+h2{font-size:clamp(18px,2.4vw,22px); line-height:1.3}
 h3{font-size:15.5px; line-height:1.4}
 p{margin:0}
 a{color:var(--accent); text-decoration:none; border-bottom:1px solid transparent}
@@ -61,7 +61,7 @@ a:focus-visible{outline:2px solid var(--accent); outline-offset:3px; border-radi
   font-family:var(--f-mono); font-size:11px; letter-spacing:.14em;
   text-transform:uppercase; color:var(--ink-3); font-weight:600;
 }
-.lede{color:var(--ink-2); max-width:68ch}
+.lede{color:var(--ink-2); max-width:64ch}
 .num{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
 code{
   font-family:var(--f-mono); font-size:.86em; background:var(--panel-2);
@@ -69,14 +69,14 @@ code{
 }
 pre{
   margin:0; background:var(--panel-2); border:1px solid var(--line);
-  border-radius:8px; padding:14px 16px; overflow-x:auto;
+  border-radius:8px; padding:14px 16px; overflow-x:auto; max-width:100%;
   font-family:var(--f-mono); font-size:12.5px; line-height:1.6; color:var(--ink-2);
 }
 pre b{color:var(--ink); font-weight:600}
 
 .masthead{
   display:flex; flex-direction:column; gap:14px;
-  padding-bottom:28px; margin-bottom:8px; border-bottom:2px solid var(--ink);
+  padding-bottom:28px; border-bottom:2px solid var(--ink);
 }
 .masthead .meta{
   display:flex; flex-wrap:wrap; gap:8px 22px;
@@ -90,21 +90,21 @@ section{margin-top:52px}
 }
 .sec-head p{color:var(--ink-3); font-size:13.5px}
 
-/* ---------- stat tiles ---------- */
-.stats{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+/* stat tiles */
+.stats{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); margin-top:28px}
 .stat{
   background:var(--panel); border:1px solid var(--line); border-radius:10px;
   padding:16px 18px; box-shadow:var(--shadow);
-  display:flex; flex-direction:column; gap:5px;
+  display:flex; flex-direction:column; gap:4px;
 }
 .stat .who{font-size:12.5px; color:var(--ink-3)}
-.stat b{font-family:var(--f-mono); font-size:30px; line-height:1.1; letter-spacing:-.03em}
+.stat b{font-family:var(--f-mono); font-size:29px; line-height:1.1; letter-spacing:-.03em}
 .stat .note{font-size:12px; color:var(--ink-3)}
 .stat .delta{color:var(--good); font-family:var(--f-mono); font-size:12px}
 
-/* ---------- pipeline flow ---------- */
-.flow-scroll{overflow-x:auto; padding:4px}
-.flow{display:flex; align-items:stretch; gap:0; min-width:720px}
+/* pipeline */
+.flow-scroll{overflow-x:auto; padding:4px; max-width:100%}
+.flow{display:flex; align-items:stretch; min-width:700px}
 .stage{
   flex:1; background:var(--panel); border:1px solid var(--line); border-radius:10px;
   padding:14px 16px; box-shadow:var(--shadow);
@@ -132,9 +132,9 @@ section{margin-top:52px}
 .sink b{display:block; font-size:13px}
 .sink span{font-size:12px; color:var(--ink-3)}
 
-/* ---------- cards ---------- */
-.grid2{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
-.grid3{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+/* cards */
+.grid2{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.grid3{display:grid; gap:14px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .card{
   background:var(--panel); border:1px solid var(--line); border-radius:10px;
   padding:18px 20px; box-shadow:var(--shadow);
@@ -143,12 +143,12 @@ section{margin-top:52px}
 .card .note{font-size:13px; color:var(--ink-2)}
 .card .src{font-family:var(--f-mono); font-size:11px; color:var(--ink-3); margin-top:auto; padding-top:6px}
 .pill{
-  display:inline-flex; align-items:center; gap:6px; align-self:flex-start;
+  align-self:flex-start;
   font-family:var(--f-mono); font-size:10.5px; font-weight:700; letter-spacing:.06em;
   padding:2px 8px; border-radius:4px; border:1px solid currentColor; color:var(--accent);
 }
 
-/* ---------- checklist ---------- */
+/* checklist */
 .checks{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px}
 .checks li{
   display:grid; grid-template-columns:20px minmax(0,1fr); gap:10px;
@@ -159,9 +159,9 @@ section{margin-top:52px}
 .checks b{color:var(--ink); font-weight:600}
 .checks .how{display:block; font-size:12.5px; color:var(--ink-3)}
 
-/* ---------- table ---------- */
-.scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--panel); box-shadow:var(--shadow)}
-table{border-collapse:collapse; width:100%; min-width:560px; font-size:14px}
+/* table */
+.scroll{overflow-x:auto; border:1px solid var(--line); border-radius:10px; background:var(--panel); box-shadow:var(--shadow); max-width:100%}
+table{border-collapse:collapse; width:100%; min-width:600px; font-size:14px}
 th,td{padding:11px 16px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
 thead th{
   font-family:var(--f-mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
@@ -171,7 +171,7 @@ tbody tr:last-child td{border-bottom:none}
 
 .callout{
   border-left:3px solid var(--accent); background:var(--accent-soft);
-  padding:16px 20px; border-radius:0 8px 8px 0; margin-top:20px;
+  padding:16px 20px; border-radius:0 8px 8px 0;
 }
 .callout p+p{margin-top:9px}
 
@@ -185,173 +185,160 @@ footer{
 <div class="wrap">
 
   <header class="masthead">
-    <p class="eyebrow">air-quality-project · 데이터 엔지니어링 포트폴리오</p>
+    <p class="eyebrow">air-quality-project</p>
     <h1>서울 기상 알림 시스템</h1>
-    <p class="lede">기상청·에어코리아 공공 API에서 9개 기상·대기질 지수를 하루 네 번 수집해, 공인 임계값 기준으로 등급을 판정하고 행동 권고를 만들어 카카오톡·이메일·Slack으로 보내는 이벤트 파이프라인입니다. 전 구성이 <b>로컬 Docker Compose로 재현·검증 가능</b>하며, 실패 경로(수집 실패·발송 실패·저장소 장애·재시작)를 설계의 1급 시민으로 다룹니다.</p>
+    <p class="lede">공공 API에서 기상·대기질 지수 9종을 하루 4번 수집하고, 공인 임계값으로 등급을 판정해 카카오톡·이메일·Slack으로 행동 권고를 보내는 이벤트 파이프라인. 전 구성이 로컬 Docker Compose로 재현됩니다.</p>
     <div class="meta">
       <span>Python · Airflow · Kafka · OpenSearch</span>
-      <span>Docker Compose 완결</span>
       <span><a href="https://github.com/hyeongyu-data/air-quality-project">github.com/hyeongyu-data/air-quality-project</a></span>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="who">테스트</span><b class="num">169</b><span class="delta">18 → 169</span></div>
+      <div class="stat"><span class="who">머지 PR</span><b class="num">40</b><span class="note">전건 CI 통과</span></div>
+      <div class="stat"><span class="who">이슈 해결</span><b class="num">28<span style="font-size:16px;color:var(--ink-3)">/37</span></b><span class="note">P0 전량 포함</span></div>
+      <div class="stat"><span class="who">설계 기록</span><b class="num">5</b><span class="note">ADR</span></div>
+      <div class="stat"><span class="who">코드</span><b class="num">4.4k</b><span class="note">LOC</span></div>
     </div>
   </header>
 
   <section>
-    <div class="stats">
-      <div class="stat"><span class="who">회귀 테스트</span><b class="num">143</b><span class="delta">18 → 143</span></div>
-      <div class="stat"><span class="who">머지된 PR</span><b class="num">37</b><span class="note">전건 CI 게이트 통과</span></div>
-      <div class="stat"><span class="who">이슈</span><b class="num">37</b><span class="note">해결 26 · 진행 11</span></div>
-      <div class="stat"><span class="who">아키텍처 결정 기록</span><b class="num">5</b><span class="note">전부 재검토 조건 포함</span></div>
-      <div class="stat"><span class="who">애플리케이션 코드</span><b class="num">4.4k</b><span class="note">LOC (테스트 제외)</span></div>
-    </div>
-  </section>
-
-  <section>
     <div class="sec-head">
       <h2>파이프라인</h2>
-      <p>KST 00 · 06 · 12 · 18시 — 판정 분기가 정의된 시각과 cron이 테스트로 묶여 있습니다</p>
+      <p>KST 00 · 06 · 12 · 18시 실행</p>
     </div>
     <div class="flow-scroll">
       <div class="flow">
         <div class="stage">
           <span class="tag">수집 · 발행</span>
           <b>Airflow DAG</b>
-          <p>공공 API 3계열 수집 → 계약 검증(수집 0건이면 태스크 실패) → 멱등 발행</p>
-          <small>schedule 0 */6 * * *</small>
+          <p>공공 API 3계열 수집. 수집 0건이면 태스크 실패로 처리</p>
+          <small>0 */6 * * *</small>
         </div>
         <span class="arrow">→</span>
         <div class="stage">
           <span class="tag">버퍼 · 재생</span>
           <b>Kafka</b>
-          <p>seoul-weather 토픽. 영속 볼륨 + 보존 72h — Consumer가 하루 죽어도 백로그 유지</p>
-          <small>enable_idempotence · earliest</small>
+          <p>영속 볼륨 + 보존 72시간. 컨슈머가 죽어도 백로그 유지</p>
+          <small>멱등 프로듀서 · earliest</small>
         </div>
         <span class="arrow">→</span>
         <div class="stage">
           <span class="tag">판정 · 발송</span>
           <b>Consumer</b>
-          <p>공인 임계값 규칙 엔진 → 행동 권고. 등급 변화 시에만 발송(쿨다운) + 12h 무발송 시 재발송</p>
-          <small>graceful shutdown · 하트비트 healthcheck</small>
+          <p>규칙 엔진으로 등급 판정. 등급이 바뀔 때만 발송</p>
+          <small>graceful shutdown · healthcheck</small>
         </div>
       </div>
     </div>
     <div class="fanout">
-      <div class="sink"><b>OpenSearch</b><span>판정 이력 (event_id upsert) · 쿨다운 상태 문서</span></div>
-      <div class="sink"><b>카카오톡</b><span>나에게 보내기 · refresh token 자동 회전</span></div>
-      <div class="sink"><b>이메일 / Slack</b><span>행동 권고 중심 본문</span></div>
-      <div class="sink"><b>콘솔</b><span>항상 출력 — 발송 억제와 무관한 감사 로그</span></div>
+      <div class="sink"><b>OpenSearch</b><span>판정 이력 · 쿨다운 상태</span></div>
+      <div class="sink"><b>카카오톡</b><span>토큰 자동 회전</span></div>
+      <div class="sink"><b>이메일 · Slack</b><span>행동 권고 본문</span></div>
+      <div class="sink"><b>콘솔</b><span>감사 로그</span></div>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
-      <h2>알림은 이렇게 갑니다</h2>
-      <p>원본 수치가 아니라 판정과 행동 권고를 전달합니다 — 결측은 결측이라고 말합니다</p>
+      <h2>알림 예시</h2>
+      <p>수치가 아니라 행동을 전달하고, 결측은 결측이라고 말합니다</p>
     </div>
     <div class="grid2">
-      <pre>[서울 오늘 아침 기상 알림] 06:00
+      <pre><b>[서울 오늘 아침 기상 알림] 06:00</b>
 
-<b>행동</b>
+행동
 - 마스크 착용
 - 우산 준비
 
-<b>위험/주의</b>
+위험/주의
 - 미세먼지 82㎍/㎥: 나쁨
 - 강수확률 70%: 나쁨
 
-<b>나머지</b>
-기온 최저 12℃, 최고 20℃
-황사 보통, 자외선 4, 특보 없음</pre>
-      <pre># 에어코리아 장애 시 — 0으로 채우지 않는다
+기온 최저 12℃, 최고 20℃</pre>
+      <pre><b># API 장애 시 — 0으로 채우지 않음</b>
 
-<b>상세 판정</b>
-- 미세먼지 PM10: 정보없음 / 판정할 수 없음
-- 강수확률 30%: 좋음 / 우산 없이 활동 가능
-- 자외선지수 6: 나쁨 / SPF50+ 필수
+- 미세먼지: 정보없음 / 판정 불가
+- 강수확률 30%: 좋음
+- 자외선 6: 나쁨 / SPF50+ 필수
 
-<b>참고</b>
-- air_quality: 에어코리아 응답 없음
-
-# 핵심 지수 전량 결측 → 외부 발송 보류</pre>
+참고
+- air_quality: 에어코리아 응답 없음</pre>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
       <h2>설계 하이라이트</h2>
-      <p>이 프로젝트가 공들인 지점 — 각 항목은 회귀 테스트로 고정돼 있습니다</p>
+      <p>전부 회귀 테스트로 고정된 항목</p>
     </div>
     <div class="grid3">
       <div class="card">
         <span class="pill">데이터 품질</span>
         <h3>결측은 0이 아니다</h3>
-        <p class="note">결측을 0으로 치환하면 "체감온도 0℃ → 동상 위험"이 한여름에 발송되고, 미세먼지 결측이 "외출 자유"가 됩니다. <code>UNKNOWN</code> 등급을 분리해 결측은 판정·발송에서 제외하고 "정보없음"으로 정직하게 표시합니다.</p>
-        <span class="src">rules.py · 판정 공통 경로 한 곳에서 9개 지수 커버</span>
+        <p class="note">결측을 0으로 채우면 "체감온도 0℃ → 동상 위험"이 한여름에 나갑니다. <code>정보없음</code> 등급으로 분리해 판정·발송에서 제외합니다.</p>
+        <span class="src">rules.py</span>
       </div>
       <div class="card">
         <span class="pill">전달 보증</span>
-        <h3>실패를 성공으로 기록하지 않는다</h3>
-        <p class="note">발송이 전량 실패하면 쿨다운 시그니처를 기록하지 않아 다음 회차에 재시도합니다. 그러지 않으면 SMTP·토큰 만료 순간의 등급이 "알린 것"으로 굳어 알림이 영구 유실됩니다. 수집 실패·발행 0건은 DAG 태스크 실패로 올라가 Slack으로 통보됩니다.</p>
-        <span class="src">should_record_signature() · on_failure_callback</span>
+        <h3>실패는 실패로 기록</h3>
+        <p class="note">발송이 전량 실패하면 "알렸다"고 기록하지 않고 다음 회차에 재시도합니다. 수집 실패는 DAG 실패로 올라가 Slack에 통보됩니다.</p>
+        <span class="src">should_record_signature()</span>
       </div>
       <div class="card">
         <span class="pill">멱등성</span>
-        <h3>키는 벽시계가 아니라 스케줄 슬롯에서</h3>
-        <p class="note"><code>event_id = 지역:YYYYMMDDHH</code>를 실행 예정 시각에서 만들어 재시도에도 값이 같습니다. Kafka는 멱등 프로듀서, OpenSearch는 <code>_id</code> upsert — 같은 이벤트를 3번 재처리해도 문서는 1건입니다.</p>
-        <span class="src">contract.build_event_id() · 자정 경계 KST 변환 포함</span>
+        <h3>재시도해도 문서는 1건</h3>
+        <p class="note"><code>event_id</code>를 스케줄 슬롯에서 만들어 재시도에도 같은 키. Kafka 멱등 프로듀서 + OpenSearch upsert.</p>
+        <span class="src">contract.build_event_id()</span>
       </div>
       <div class="card">
         <span class="pill">상태 관리</span>
-        <h3>쿨다운 상태는 문서 GET으로</h3>
-        <p class="note">직전 등급·마지막 발송 시각을 지역별 상태 문서로 관리합니다. 문서 GET은 refresh와 무관하게 실시간이라 검색 기반의 지연 레이스가 구조적으로 없습니다. 등급이 같아도 12시간 무발송이면 재발송해 "조용함 = 정상"을 보증합니다.</p>
-        <span class="src">weather-cooldown-state · OpenSearch 장애 시 로컬 캐시 폴백</span>
+        <h3>쿨다운은 문서 GET</h3>
+        <p class="note">직전 등급을 지역별 문서로 관리 — GET은 실시간이라 검색 레이스가 없습니다. 12시간 무발송이면 재발송해 침묵과 고장을 구분합니다.</p>
+        <span class="src">weather-cooldown-state</span>
       </div>
       <div class="card">
         <span class="pill">시간대</span>
-        <h3>컨테이너 TZ에 의존하지 않는다</h3>
-        <p class="note">모든 시각을 코드에서 KST로 명시합니다(<code>now_kst()</code>). TZ=UTC 환경에서도 발표시각 역산·오늘 예보 필터·인덱스 날짜가 전부 같은 결과 — AWS Lambda(UTC 기본)로 옮겨도 조용히 틀어질 지점이 없습니다.</p>
-        <span class="src">timeutil.py · TZ 3종 매트릭스 테스트</span>
+        <h3>TZ에 의존하지 않는다</h3>
+        <p class="note">모든 시각을 코드에서 KST로 명시. TZ=UTC 환경에서도 같은 결과가 나와 클라우드 이전 시 틀어질 지점이 없습니다.</p>
+        <span class="src">timeutil.py</span>
       </div>
       <div class="card">
         <span class="pill">보안</span>
-        <h3>키는 로그에도 페이로드에도 없다</h3>
-        <p class="note">공공 API 키는 쿼리스트링이라 예외 문자열에 그대로 실립니다. 값이 만들어지는 지점에서 마스킹하고, 로깅 필터를 안전망으로 겹칩니다 — 로그뿐 아니라 Kafka 페이로드·이메일 본문으로 새는 경로까지 막습니다.</p>
-        <span class="src">masking.py · serviceKey=*** (키 이름은 남겨 원인 추적 가능)</span>
+        <h3>키는 어디에도 남지 않는다</h3>
+        <p class="note">API 키가 예외 문자열에 실려 로그·페이로드로 새는 경로를 값 생성 지점에서 마스킹하고, 로깅 필터로 이중 방어합니다.</p>
+        <span class="src">masking.py</span>
       </div>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
-      <h2>기술 선택 — 왜 이 스택인가</h2>
-      <p>규모 주장을 하지 않습니다. 과잉은 인정하고 근거와 재검토 조건을 기록합니다</p>
+      <h2>기술 선택</h2>
+      <p>과잉은 인정하고, 근거와 재검토 조건을 기록합니다</p>
     </div>
     <div class="scroll">
       <table>
-        <thead><tr><th>선택</th><th>정직한 전제</th><th>실제 근거</th><th>재검토 조건</th></tr></thead>
+        <thead><tr><th>선택</th><th>이유</th><th>재검토 조건</th></tr></thead>
         <tbody>
           <tr>
             <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0002-why-kafka.md"><b>Kafka</b></a></td>
-            <td>하루 4건 — 규모로는 정당화되지 않는다</td>
-            <td>수집과 발송의 장애 격리, 백로그 재생, 컨슈머 그룹·오프셋·멱등 프로듀서를 운영 문제로 학습</td>
+            <td>규모(하루 4건)가 아니라 장애 격리와 백로그 재생이 근거</td>
             <td>실배포 시 SQS 교체</td>
           </tr>
           <tr>
             <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0003-why-opensearch.md"><b>OpenSearch</b></a></td>
-            <td>연 1,460건에 검색 엔진은 과하다</td>
-            <td>이력 탐색(REST 쿼리)과 컨테이너 간 공유 상태의 겸용, 매핑·ISM·단일 노드 함정 학습</td>
-            <td>대시보드 요구가 없으면 SQLite 강등이 옳다</td>
+            <td>판정 이력 탐색과 공유 상태 저장을 하나로</td>
+            <td>대시보드 요구가 없으면 SQLite로 강등</td>
           </tr>
           <tr>
             <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0004-why-rule-engine.md"><b>규칙 엔진</b></a></td>
-            <td>ML을 쓰지 않는 이유를 물을 지점</td>
-            <td>임계값이 환경부·기상청 공인 기준 — 가치는 예측이 아니라 기준의 정확한 반영과 설명 가능성</td>
-            <td>자체 예측 요구 시 모델을 입력 지수로 추가</td>
+            <td>임계값이 환경부·기상청 공인 기준 — 예측이 아니라 정확한 반영이 가치</td>
+            <td>자체 예측 요구 시 모델을 입력으로 추가</td>
           </tr>
           <tr>
             <td><a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/adr/0005-aws-migration-path.md"><b>로컬 Docker</b></a></td>
-            <td>비용 절약이 아니라 검증 가능성의 선택</td>
-            <td>모든 코드가 <code>docker compose up</code>으로 제3자 재현 가능. 검증 불가한 AWS 코드는 삭제(ADR-0001)</td>
-            <td>실사용자 상시 제공 시 EventBridge+Lambda+SQS</td>
+            <td>모든 코드를 제3자가 재현·검증 가능하게 — 검증 불가한 코드는 삭제</td>
+            <td>실사용자 상시 제공 시 AWS 이전</td>
           </tr>
         </tbody>
       </table>
@@ -361,39 +348,37 @@ footer{
   <section>
     <div class="sec-head">
       <h2>운영 품질</h2>
-      <p>전부 Docker에서 장애를 실제로 일으켜 검증한 항목입니다</p>
+      <p>Docker에서 장애를 실제로 일으켜 검증</p>
     </div>
     <div class="grid2">
       <ul class="checks">
-        <li><b>재생성 내구성</b><span class="how">Kafka 토픽·오프셋, Airflow DAG 상태·이력, OpenSearch 데이터가 <code>docker compose down/up</code>을 넘어 유지 — 볼륨 소유권 함정(non-root vs root 생성)을 실측으로 회피</span></li>
-        <li><b>장애 복원</b><span class="how">브로커·OpenSearch가 죽은 채 기동해도 지수 백오프(5→300초)로 스스로 재연결. OpenSearch 중단 중에도 로컬 캐시로 쿨다운 유지</span></li>
-        <li><b>수명 관리</b><span class="how">SIGTERM 1초 내 정리 종료(exit 0), 하트비트 파일로 "프로세스 생존"이 아니라 "루프 생존"을 healthcheck</span></li>
-        <li><b>보존 정책</b><span class="how">Kafka 72h · OpenSearch ISM 90일 — 무한 증가하는 저장소가 없다</span></li>
+        <li><b>재생성 내구성</b><span class="how">토픽·오프셋·DAG 상태·이력이 down/up을 넘어 유지</span></li>
+        <li><b>장애 복원</b><span class="how">브로커·저장소가 죽어도 백오프 재연결, 쿨다운은 로컬 캐시로 유지</span></li>
+        <li><b>수명 관리</b><span class="how">SIGTERM 1초 내 정리 종료, 하트비트로 루프 생존 감시</span></li>
+        <li><b>보존 정책</b><span class="how">Kafka 72시간 · OpenSearch 90일</span></li>
       </ul>
       <ul class="checks">
-        <li><b>CI 게이트</b><span class="how">compile + 143 테스트가 머지 필수 조건(브랜치 보호). 패키지 import 스모크로 "CI 초록인데 런타임 완파"류 재발 방지</span></li>
-        <li><b>협업 프로세스</b><span class="how">Issue → 브랜치 → PR → CI → squash. CODEOWNERS · 보안 체크리스트 템플릿 · Dependabot 7일 SLA</span></li>
-        <li><b>결정 기록</b><span class="how">ADR 5편 — 전부 검토한 대안과 재검토 조건 포함. 장애 시나리오는 <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/operational-risks.md">운영 리스크 문서</a>에 파일:라인 근거로</span></li>
-        <li class="todo"><b>남은 것 (진행 중)</b><span class="how">구조화 로깅·메트릭(#49) · 메시지 스키마 계약+DLQ(#48) · API 파싱 계약 테스트(#43) · README 실행 증거(#51)</span></li>
+        <li><b>CI 게이트</b><span class="how">169 테스트 + 커버리지 바닥 + compose 검증이 머지 조건</span></li>
+        <li><b>계약 테스트</b><span class="how">공공 API 응답을 픽스처로 고정 — 스키마가 바뀌면 CI가 먼저 깨짐</span></li>
+        <li><b>결정 기록</b><span class="how">ADR 5편 · <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/troubleshooting.md">트러블슈팅 기록</a> · <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/operational-risks.md">운영 리스크 문서</a></span></li>
+        <li class="todo"><b>진행 중</b><span class="how">메트릭·구조화 로깅 · 스키마 계약+DLQ · README 실행 증거</span></li>
       </ul>
     </div>
   </section>
 
   <section>
     <div class="sec-head">
-      <h2>엔지니어링 과정</h2>
-      <p>이 저장소의 차별점은 완성된 코드가 아니라 결함을 다룬 방식입니다</p>
+      <h2>만든 과정</h2>
     </div>
     <div class="callout">
-      <p><b>진단부터 했습니다.</b> 데이터 엔지니어링 실무·플랫폼 아키텍처·SRE·채용, 네 관점으로 독립 검토해 결함 28건을 심각도별로 등록했습니다. 그중에는 "API 장애 시 결측이 0이 되어 한여름에 동상 경고가 나간다", "발송이 실패해도 성공으로 기록돼 알림이 영구 유실된다" 같은 P0 6건이 있었습니다.</p>
-      <p><b>의존 순서로 고쳤습니다.</b> 거짓말을 멈춘다(오알림·실패 은폐) → 상태를 잃지 않는다(영속성·멱등성) → 측정할 수 있게 만든다 → 회귀를 막는다 → 근거를 남긴다. 순서를 뒤집으면 잘못된 데이터를 성실하게 영속화하게 됩니다.</p>
-      <p><b>전부 실측으로 검증했습니다.</b> 볼륨 소유권은 컨테이너를 띄워 확인했고, 장애는 실제로 일으켰고(OpenSearch 중단, stale pid 재현), 회귀 테스트는 18개에서 143개가 됐습니다. 검증할 수 없는 코드(실행된 적 없는 AWS Glue 메달리언)는 근거를 ADR로 남기고 삭제했습니다 — <b>검증 불가능한 코드를 두지 않는 것도 설계 결정입니다.</b></p>
+      <p>실무·아키텍처·SRE·채용 네 관점으로 <b>진단부터</b> 해서 결함 28건을 등록했습니다. "결측이 0이 되어 한여름에 동상 경고가 나간다" 같은 P0 6건이 있었습니다.</p>
+      <p><b>의존 순서로 고쳤습니다</b> — 오알림·실패 은폐를 먼저, 그다음 영속성과 멱등성, 그다음 측정과 문서. 전부 Docker에서 장애를 재현해 검증했고, 테스트는 18개에서 169개가 됐습니다.</p>
+      <p>실행된 적 없는 AWS 코드는 근거를 남기고 <b>삭제</b>했습니다. 검증할 수 없는 코드를 두지 않는 것도 설계 결정입니다.</p>
     </div>
   </section>
 
   <footer>
-    <p>이 문서는 저장소 <span class="num">docs/dashboard.html</span>로 관리됩니다. 숫자(테스트·PR·이슈)가 바뀌면 상단 지표를, 설계가 바뀌면 해당 카드와 ADR 링크를 갱신합니다.</p>
-    <p>결함 인벤토리와 개선 이력의 전체 기록: <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/operational-risks.md">operational-risks.md</a> · <a href="https://github.com/hyeongyu-data/air-quality-project/issues?q=is%3Aissue">GitHub Issues</a></p>
+    <p><a href="https://github.com/hyeongyu-data/air-quality-project">저장소</a> · <a href="https://github.com/hyeongyu-data/air-quality-project/tree/master/docs/adr">ADR</a> · <a href="https://github.com/hyeongyu-data/air-quality-project/blob/master/docs/troubleshooting.md">트러블슈팅</a> · <a href="https://github.com/hyeongyu-data/air-quality-project/issues">이슈</a></p>
   </footer>
 
 </div>
