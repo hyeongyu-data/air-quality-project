@@ -247,7 +247,7 @@ footer{
     <div class="meta">
       <span>진단일 2026-07-29</span>
       <span>검토 대상 5,077 LOC</span>
-      <span>등록 이슈 36건 · 해결 20건 · P0 0건</span>
+      <span>등록 이슈 37건 · 해결 25건 · P0 0건</span>
       <span><a href="https://github.com/hyeongyu-data/air-quality-project">github.com/hyeongyu-data/air-quality-project</a></span>
     </div>
   </header>
@@ -297,7 +297,7 @@ footer{
         <header>
           <span class="chip g3">해결됨</span>
           <h3>고치고 머지한 것 — <strong>P0 전량 해결</strong></h3>
-          <span class="count num">12건</span>
+          <span class="count num">17건</span>
         </header>
         <div class="rows">
           <div class="row done">
@@ -382,6 +382,34 @@ footer{
             </div>
             <span class="where">consumer/consumer.py:63<br>docker-compose.yaml:270,281</span>
           </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/76">PR #76</a>
+            <div class="what"><b>컨슈머가 1시간마다 자살한다</b>
+            <em>정상 종료와 크래시 루프가 로그상 구분되지 않는다. 재시작 시 연결 실패는 그 1시간 동안 고정된다.</em></div>
+            <span class="where">consumer/consumer.py:400-409</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/77">PR #77</a>
+            <div class="what"><b>쿨다운 상태를 이력 검색으로 읽는다</b>
+            <em>refresh 지연 레이스, <span class="num">match</span> 쿼리 오매칭, 무발송 상한 부재. 조용한 게 정상인지 고장인지 구분할 신호가 없다.</em></div>
+            <span class="where">consumer/alert.py:724-749</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/47">#47</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/78">PR #78</a>
+            <div class="what"><b>Airflow 메타DB가 볼륨 밖에 있다</b>
+            <em>컨테이너 재생성 시 실행 이력과 DAG on/off 상태가 전멸한다. 켜둔 DAG가 꺼진 채 돌아와 조용히 무알림이 된다.</em></div>
+            <span class="where">docker-compose.yaml:113,140</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/54">#54</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/75">PR #75</a>
+            <div class="what"><b>Dependabot PR 6건 방치</b><em>"주간 점검한다"고 문서에 써놓고 2주 넘게 방치. 프로세스를 강점으로 내세운 만큼 잃는 게 크다.</em></div>
+            <span class="where">PR #3 #5 #25 #26 #27 #29</span>
+          </div>
+          <div class="row done">
+            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/52">#52</a></span><a class="fixed" href="https://github.com/hyeongyu-data/air-quality-project/pull/79">PR #79</a>
+            <div class="what"><b>기술 선택 근거(ADR)가 없다</b><em>메시지 키가 "서울" 고정이라 파티션 병렬성 0, 브로커 1대, 보존 24시간. Kafka의 세 가지 가치 중 어느 것도 쓰이지 않는데 이유가 어디에도 없다.</em></div>
+            <span class="where">docs/adr/ (신설)</span>
+          </div>
         </div>
       </div>
 
@@ -389,32 +417,14 @@ footer{
         <header>
           <span class="chip g1">나쁨 · P1</span>
           <h3>데이터가 조용히 틀어지거나, 장애를 인지할 수 없다</h3>
-          <span class="count num">6건 남음</span>
+          <span class="count num">3건 남음</span>
         </header>
         <div class="rows">
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a></span>
-            <div class="what"><b>컨슈머가 1시간마다 자살한다</b>
-            <em>정상 종료와 크래시 루프가 로그상 구분되지 않는다. 재시작 시 연결 실패는 그 1시간 동안 고정된다.</em></div>
-            <span class="where">consumer/consumer.py:400-409</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a></span>
-            <div class="what"><b>쿨다운 상태를 이력 검색으로 읽는다</b>
-            <em>refresh 지연 레이스, <span class="num">match</span> 쿼리 오매칭, 무발송 상한 부재. 조용한 게 정상인지 고장인지 구분할 신호가 없다.</em></div>
-            <span class="where">consumer/alert.py:724-749</span>
-          </div>
           <div class="row s1">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/43">#43</a></span>
             <div class="what"><b>테스트가 rules.py 한 모듈뿐</b>
             <em>커버리지가 낮은 게 아니라 테스트 가능하게 설계되지 않았다. 순수 함수인 <span class="num">send_all(send_external=False)</span>조차 미검증 — 쿨다운의 핵심 계약이다.</em></div>
             <span class="where">tests/ · pytest.ini</span>
-          </div>
-          <div class="row s1">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/47">#47</a></span>
-            <div class="what"><b>Airflow 메타DB가 볼륨 밖에 있다</b>
-            <em>컨테이너 재생성 시 실행 이력과 DAG on/off 상태가 전멸한다. 켜둔 DAG가 꺼진 채 돌아와 조용히 무알림이 된다.</em></div>
-            <span class="where">docker-compose.yaml:113,140</span>
           </div>
           <div class="row s1">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/48">#48</a></span>
@@ -435,18 +445,13 @@ footer{
         <header>
           <span class="chip g2">보통 · P2</span>
           <h3>구조·재현성·프로세스 부채</h3>
-          <span class="count num">6건 남음</span>
+          <span class="count num">5건 남음</span>
         </header>
         <div class="rows">
           <div class="row s2">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/46">#46</a></span>
             <div class="what"><b>producer.py 3중 복붙</b><em>같은 유틸 5종이 세 클라이언트에 복사돼 있고 <span class="num">_safe_float</span>의 기본값만 서로 다르다. 그 차이가 #33의 온상이다.</em></div>
             <span class="where">producer/producer.py:60,434,734</span>
-          </div>
-          <div class="row s2">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/54">#54</a></span>
-            <div class="what"><b>Dependabot PR 6건 방치</b><em>"주간 점검한다"고 문서에 써놓고 2주 넘게 방치. 프로세스를 강점으로 내세운 만큼 잃는 게 크다.</em></div>
-            <span class="where">PR #3 #5 #25 #26 #27 #29</span>
           </div>
           <div class="row s2">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/22">#22</a></span>
@@ -475,18 +480,13 @@ footer{
         <header>
           <span class="chip solid">문서 · 서사</span>
           <h3>코드는 있는데 근거가 없다</h3>
-          <span class="count num">4건 남음</span>
+          <span class="count num">3건 남음</span>
         </header>
         <div class="rows">
           <div class="row s3">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/51">#51</a></span>
             <div class="what"><b>README에 실행 증거도 수치도 없다</b><em>375줄 중 절반이 실행 명령어인데, 스크린샷 0장·측정값 0개. 이 시스템이 한 번이라도 돌았다는 증거가 없다.</em></div>
             <span class="where">README.md</span>
-          </div>
-          <div class="row s3">
-            <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/52">#52</a></span>
-            <div class="what"><b>기술 선택 근거(ADR)가 없다</b><em>메시지 키가 "서울" 고정이라 파티션 병렬성 0, 브로커 1대, 보존 24시간. Kafka의 세 가지 가치 중 어느 것도 쓰이지 않는데 이유가 어디에도 없다.</em></div>
-            <span class="where">docs/adr/ (신설)</span>
           </div>
           <div class="row s3">
             <span class="id"><a href="https://github.com/hyeongyu-data/air-quality-project/issues/53">#53</a></span>
@@ -512,16 +512,16 @@ footer{
     <div class="scroll">
       <table>
         <thead>
-          <tr><th>영역</th><th>해결</th><th>매우나쁨</th><th>나쁨</th><th>보통</th><th>남음</th><th>한 줄 진단</th></tr>
+          <tr><th>영역</th><th>해결</th><th>남음</th><th>한 줄 진단</th></tr>
         </thead>
         <tbody>
-          <tr><td>데이터 품질</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n">0</td><td class="n"><b>1</b></td><td class="n">0</td><td class="n"><b>1</b></td><td>결측·시간대·죽은 지표를 정리했다. 파싱 계약 테스트가 남았다.</td></tr>
-          <tr><td>전달 보증</td><td class="n" style="color:var(--g-good)"><b>4</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>실패가 성공으로 기록되던 경로를 끊고 멱등성을 넣었다. 오프셋·DLQ가 남았다.</td></tr>
-          <tr><td>상태 영속성</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n">0</td><td class="n"><b>1</b></td><td class="n">0</td><td class="n"><b>1</b></td><td>Kafka 볼륨과 OpenSearch 재연결을 실측 검증했다. Airflow 메타DB가 남았다.</td></tr>
-          <tr><td>보안</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>2</b></td><td>키가 새던 경로를 막았다. 운영 프로필과 CI 스캐닝이 남았다.</td></tr>
-          <tr><td>관측성</td><td class="n" style="color:var(--g-good)"><b>0</b></td><td class="n">0</td><td class="n"><b>2</b></td><td class="n"><b>1</b></td><td class="n"><b>3</b></td><td>측정값이 없어 무엇이 고장인지 말할 수 없다.</td></tr>
-          <tr><td>구조 · 재현성</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>3</b></td><td class="n"><b>3</b></td><td>죽은 코드를 걷어냈다. 의존성 정합성과 producer 분해가 남았다.</td></tr>
-          <tr><td>문서 · 서사</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n">0</td><td class="n">0</td><td class="n"><b>3</b></td><td class="n"><b>3</b></td><td>결정의 근거와 실행의 증거를 남기는 일이 남았다.</td></tr>
+          <tr><td>데이터 품질</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n"><b>1</b></td><td>결측·시간대·죽은 지표를 정리했다. 파싱 계약 테스트가 남았다.</td></tr>
+          <tr><td>전달 보증</td><td class="n" style="color:var(--g-good)"><b>5</b></td><td class="n"><b>2</b></td><td>쿨다운 레이스와 무발송 간격까지 닫았다. 오프셋 수동 커밋·DLQ가 남았다.</td></tr>
+          <tr><td>상태 영속성</td><td class="n" style="color:var(--g-good)"><b>3</b></td><td class="n">0</td><td>Kafka·OpenSearch·Airflow 메타DB 전부 실측 검증으로 완료.</td></tr>
+          <tr><td>보안</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n"><b>2</b></td><td>키가 새던 경로를 막았다. 운영 프로필과 CI 스캐닝이 남았다.</td></tr>
+          <tr><td>관측성</td><td class="n" style="color:var(--g-good)"><b>1</b></td><td class="n"><b>2</b></td><td>컨슈머 생존이 healthcheck에 잡힌다. 측정값과 대시보드가 남았다.</td></tr>
+          <tr><td>구조 · 재현성</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n"><b>2</b></td><td>죽은 코드와 방치된 갱신 PR을 정리했다. 의존성 정합성·producer 분해가 남았다.</td></tr>
+          <tr><td>문서 · 서사</td><td class="n" style="color:var(--g-good)"><b>2</b></td><td class="n"><b>2</b></td><td>ADR 5편으로 결정의 근거를 남겼다. README 재구성·트러블슈팅이 남았다.</td></tr>
         </tbody>
       </table>
     </div>
@@ -565,13 +565,13 @@ footer{
 
       <div class="step">
         <span class="dot"></span>
-        <h3>측정할 수 있게 만든다</h3>
+        <h3>측정할 수 있게 만든다 <span class="chip g2" style="vertical-align:middle">2/3</span></h3>
         <div class="body">
           <p>구조화 로깅과 메트릭. README에 쓸 숫자가 여기서 나오고, 운영 대시보드(<a href="https://github.com/hyeongyu-data/air-quality-project/issues/24">#24</a>)의 선행 조건이기도 합니다.</p>
           <ul>
             <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/49">#49</a> 구조화 로깅 · 채널별 발송 결과 · 결측률 · end-to-end 지연</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a> 쿨다운 상태 분리 + 하트비트</li>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a> 컨슈머 데몬화 + healthcheck</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/42">#42</a> 쿨다운 상태 분리 + 최대 무발송 간격</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/40">#40</a> 컨슈머 데몬화 + healthcheck</li>
           </ul>
         </div>
       </div>
@@ -591,11 +591,11 @@ footer{
 
       <div class="step">
         <span class="dot"></span>
-        <h3>근거와 증거를 남긴다</h3>
+        <h3>근거와 증거를 남긴다 <span class="chip g2" style="vertical-align:middle">1/3</span></h3>
         <div class="body">
           <p>포트폴리오 점수가 가장 크게 움직이는 구간입니다. 과잉 설계를 <em>인정하고 근거를 대는 쪽</em>이 숨기는 쪽보다 언제나 높게 평가됩니다.</p>
           <ul>
-            <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/52">#52</a> ADR — 왜 Kafka인가, 재검토 조건은 무엇인가</li>
+            <li>✔ <a href="https://github.com/hyeongyu-data/air-quality-project/issues/52">#52</a> ADR 5편 — 왜 Kafka인가, 재검토 조건은 무엇인가</li>
             <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/51">#51</a> README 재구성 — 결과 · 수치 · 데이터 계약 · 알려진 한계</li>
             <li><a href="https://github.com/hyeongyu-data/air-quality-project/issues/53">#53</a> 트러블슈팅 서사 3건</li>
           </ul>
@@ -647,9 +647,9 @@ footer{
     </div>
     <div class="tally">
       <div class="card"><p class="who">등록 이슈</p><b class="num">36</b><p class="note">누적</p></div>
-      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">20</b><p class="note">P0 6건 전량 포함</p></div>
-      <div class="card"><p class="who">머지된 PR</p><b class="num" style="color:var(--g-good)">17</b><p class="note">#31 · #56~#71</p></div>
-      <div class="card"><p class="who">남음</p><b class="num">16</b><p class="note">P0 0 · P1 6 · P2 6 · 문서 4</p></div>
+      <div class="card"><p class="who">완료</p><b class="num" style="color:var(--g-good)">25</b><p class="note">P0 6건 전량 포함</p></div>
+      <div class="card"><p class="who">머지된 PR</p><b class="num" style="color:var(--g-good)">26</b><p class="note">#31 · #56~#79 (Dependabot 4건 포함)</p></div>
+      <div class="card"><p class="who">남음</p><b class="num">11</b><p class="note">P0 0 · P1 3 · P2 5 · 문서 3</p></div>
     </div>
     <div class="callout">
       <p><b>이번 회차에 끝낸 것.</b> 사용자에게 틀린 정보가 나가는 경로(결측 0 치환·황사 죽은 지표·타임존), 실패가 성공으로 기록되던 경로(쿨다운 전진·DAG 성공 반환), 키가 로그·페이로드로 새던 경로를 막고 발행·색인에 멱등성을 넣었습니다. 회귀 테스트는 18개에서 <span class="num">101개</span>로 늘었고, 죽은 코드 <span class="num">354줄</span>을 걷어냈습니다.</p>

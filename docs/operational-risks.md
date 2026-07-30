@@ -158,9 +158,9 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 | --- | --- | --- |
 | 1 ✔ | 거짓말을 멈춘다 — 틀린 정보 발송과 실패의 성공 보고를 끊는다 | ~~[#33](https://github.com/hyeongyu-data/air-quality-project/issues/33) [#34](https://github.com/hyeongyu-data/air-quality-project/issues/34) [#35](https://github.com/hyeongyu-data/air-quality-project/issues/35) [#38](https://github.com/hyeongyu-data/air-quality-project/issues/38) [#50](https://github.com/hyeongyu-data/air-quality-project/issues/50)~~ 완료 |
 | 2 ✔ | 상태를 잃지 않는다 — 영속성과 멱등성 | ~~[#41](https://github.com/hyeongyu-data/air-quality-project/issues/41) [#36](https://github.com/hyeongyu-data/air-quality-project/issues/36) [#37](https://github.com/hyeongyu-data/air-quality-project/issues/37)~~ 완료 · [#47](https://github.com/hyeongyu-data/air-quality-project/issues/47) Airflow 메타DB 남음 |
-| 3 | 측정할 수 있게 만든다 | [#49](https://github.com/hyeongyu-data/air-quality-project/issues/49) [#42](https://github.com/hyeongyu-data/air-quality-project/issues/42) [#40](https://github.com/hyeongyu-data/air-quality-project/issues/40) |
+| 3 | 측정할 수 있게 만든다 (2/3) | ~~[#42](https://github.com/hyeongyu-data/air-quality-project/issues/42) [#40](https://github.com/hyeongyu-data/air-quality-project/issues/40)~~ 완료 · [#49](https://github.com/hyeongyu-data/air-quality-project/issues/49) 남음 |
 | 4 | 회귀를 막는다 — 테스트 가능한 구조로 바꾼 뒤 리팩터링 | [#43](https://github.com/hyeongyu-data/air-quality-project/issues/43) [#48](https://github.com/hyeongyu-data/air-quality-project/issues/48) [#45](https://github.com/hyeongyu-data/air-quality-project/issues/45) [#46](https://github.com/hyeongyu-data/air-quality-project/issues/46) |
-| 5 | 근거와 증거를 남긴다 | [#52](https://github.com/hyeongyu-data/air-quality-project/issues/52) [#51](https://github.com/hyeongyu-data/air-quality-project/issues/51) [#53](https://github.com/hyeongyu-data/air-quality-project/issues/53) |
+| 5 | 근거와 증거를 남긴다 (1/3) | ~~[#52](https://github.com/hyeongyu-data/air-quality-project/issues/52)~~ 완료 · [#51](https://github.com/hyeongyu-data/air-quality-project/issues/51) [#53](https://github.com/hyeongyu-data/air-quality-project/issues/53) 남음 |
 
 순서를 뒤집으면 안 되는 이유가 하나씩 있습니다. 3번 없이 5번을 하면 README에 쓸 숫자가 없고, 4번 없이 리팩터링하면 검증 없는 변경이 되며, 1번 없이 2번을 하면 잘못된 데이터를 성실하게 영속화하게 됩니다.
 
@@ -178,12 +178,13 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 
 **전달 보증**
 - [x] 채널별 발송 결과가 저장·집계되고 쿨다운을 전진시키지 않는다 (자동 재시도는 미구현 — 다음 회차에 재발송)
+- [x] 쿨다운 상태가 지역별 문서(실시간 GET)로 관리되고, 등급이 같아도 12시간 경과 시 재발송한다 (#42)
 - [ ] 오프셋은 처리 성공 후 커밋되고 실패 메시지는 DLQ로 간다
 - [x] 중복 방지 키(`event_id`)가 있고 OpenSearch는 upsert다
-- [ ] 무알림이 정상인지 고장인지 하트비트로 구분된다
+- [x] 무알림이 정상인지 고장인지 최대 무발송 간격(MAX_SILENCE_HOURS)으로 구분된다
 
 **상태 영속성**
-- [ ] Kafka 로그·OpenSearch 데이터·Airflow 메타DB가 각각 명명 볼륨에 있다 (Kafka·OpenSearch 완료, **Airflow 메타DB 남음** — #47)
+- [x] Kafka 로그·OpenSearch 데이터·Airflow 메타DB가 각각 명명 볼륨에 있다 (#69 #70 #78 — 전부 재생성 실측 검증)
 - [x] 인덱스 보존 정책(ISM 90일)이 설정돼 있다 (로그 보존 정책은 #47)
 - [ ] 디스크 사용률 알람이 있다
 
@@ -202,7 +203,7 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 
 **관측성 · 운영**
 - [ ] 위 6절의 메트릭·알람 세트가 배포돼 있다
-- [ ] 컨슈머에 healthcheck가 있고 정상 종료 루프가 제거됐다
+- [x] 컨슈머에 healthcheck(하트비트 파일)가 있고 1시간 자살 루프가 제거됐다 (#76)
 - [ ] 런북이 있다 — API 장애 시, 채널 인증 만료 시, OpenSearch red 시, 백로그 폭증 시
 - [ ] 부하 상한이 측정돼 있다
 
