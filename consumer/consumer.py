@@ -16,7 +16,6 @@ import signal
 import time
 from pathlib import Path
 from typing import Dict, Optional, List
-from datetime import datetime
 from kafka import KafkaConsumer
 from opensearchpy import OpenSearch
 from dotenv import load_dotenv
@@ -25,7 +24,7 @@ from dotenv import load_dotenv
 try:
     from . import opensearch_setup
     from .rules import (
-        AlertRuleEngine, AlertGrouping, AlertLevel,
+        AlertRuleEngine, AlertGrouping,
         grade_signature, should_send, core_indices_unknown,
     )
     from .alert import AlertManager
@@ -33,8 +32,7 @@ except ImportError:
     # 직접 실행 시
     import opensearch_setup
     from rules import (
-        AlertRuleEngine, AlertGrouping, AlertLevel,
-        grade_signature, should_send, core_indices_unknown,
+        AlertRuleEngine, AlertGrouping, grade_signature, should_send, core_indices_unknown,
     )
     from alert import AlertManager
 
@@ -547,7 +545,7 @@ class WeatherAlertConsumer:
     
     def print_stats(self):
         """통계 출력"""
-        print(f"\n현재 통계:")
+        print("\n현재 통계:")
         print(f"  처리된 메시지: {self.stats['total_processed']}")
         print(f"  발송된 알림: {self.stats['total_alerts_sent']}")
         print(f"  발생한 오류: {self.stats['errors']}\n")

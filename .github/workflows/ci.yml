@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # gitleaks가 커밋 이력을 스캔한다
+          fetch-depth: 0
 
       - uses: actions/setup-python@v7
         with:
@@ -41,3 +44,25 @@ jobs:
         run: |
           touch .env
           docker compose config -q
+
+      # 정적 분석 — 오류·버그 클래스(E9, F)만 게이트. 스타일 규칙 확장은
+      # 전체 diff를 만들므로 별도 판단으로.
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check --select E9,F producer consumer dags scripts tests
+
+      # 의존성 취약점 — 실제 설치되는 핀 파일 기준
+      - name: Audit dependencies (pip-audit)
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements-consumer.txt
+
+      # 비밀정보 — 커밋 이력 전체 스캔. .env는 gitignore지만 실수로 커밋된
+      # 키·토큰을 머지 전에 잡는다.
+      - name: Scan secrets (gitleaks)
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 git /repo --no-banner
+
+      # Dockerfile 검증
+      - name: Lint Dockerfile (hadolint)
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile

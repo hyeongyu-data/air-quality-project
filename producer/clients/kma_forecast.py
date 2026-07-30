@@ -9,7 +9,7 @@ import requests
 
 from ..api_common import BasePublicDataClient
 from ..masking import mask_secrets
-from ..timeutil import now_kst, to_kst
+from ..timeutil import now_kst
 
 logger = logging.getLogger(__name__)
 
