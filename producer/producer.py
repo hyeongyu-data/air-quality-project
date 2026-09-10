@@ -36,8 +36,10 @@ except ImportError:  # 직접 실행 시
 
 try:
     from .masking import install_secret_filter
+    from .secretstore import read_secret
 except ImportError:  # 직접 실행 시
     from masking import install_secret_filter
+    from secretstore import read_secret
 
 # 값 생성 지점 마스킹의 안전망. 이후 누가 URL을 그대로 로깅해도 출력 단계에서 걸린다.
 install_secret_filter()
@@ -127,8 +129,8 @@ class WeatherDataCollector:
     
     def __init__(self):
         """수집기 초기화"""
-        weather_api_key = os.getenv("WEATHER_API_KEY", "")
-        airkorea_api_key = os.getenv("AIRKOREA_API_KEY") or weather_api_key
+        weather_api_key = read_secret("WEATHER_API_KEY", "")
+        airkorea_api_key = read_secret("AIRKOREA_API_KEY") or weather_api_key
         self.weather_api = WeatherAPIClient(
             api_key=weather_api_key
         )

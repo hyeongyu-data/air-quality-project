@@ -116,3 +116,40 @@ Prometheus/Grafana 배포, 외부 알림 시스템 연동, 전체 파이프라�
 ### 1번 항목 확인 결과: 공공 API 픽스처 테스트
 
 `tests/fixtures/`와 `tests/test_api_contract.py`에 KMA·AirKorea JSON/XML 픽스처, 성공 응답·실패 응답·필수 필드 검증이 이미 구현되어 있다. 중복 Issue #110은 종료하며 추가 코드는 작성하지 않는다.
+
+## 운영 안정성·보안 이슈 (2026-09-11 발행)
+
+위험도 순: `#117` 시크릿 이관 → `#118` OpenSearch·Kafka 인증·non-root → `#119`
+Airflow PostgreSQL·LocalExecutor → `#120` 런타임 pip 제거 → `#121` 알람 자동 발송
+→ `#122` 성능 정기 측정. 각 항목은 계획 작성 → 별도 세션 검증 → 구현·docker
+검증 → PR → 별도 세션 리뷰 → 수정·머지 순서.
+
+### #117 시크릿을 .env 평문에서 Docker secrets로 이관
+
+- Issue: `#117` / 브랜치: `feat/117-secret-file-loader`
+- 문제: `consumer`가 `env_file: .env`로 모든 시크릿을 컨테이너 env에 주입 →
+  `docker inspect`·`/proc/1/environ` 평문 노출. `.env` 한 파일 유출 = 전체 노출.
+- 구현:
+  - `_FILE` 관례 로더(`read_secret`) — `FOO_FILE` 파일 우선, 없으면 `FOO` env.
+    두 런타임이 코드를 공유 못 해 `consumer/secretstore.py`·`producer/secretstore.py`
+    쌍둥이(12줄 순수 함수, `ponytail:` 교차 주석).
+  - consumer 시크릿 읽기(SMTP·Slack·카카오·OpenSearch 비번)를 `read_secret`로.
+    producer API 키도 전방 호환으로 교체(대응 Docker secret은 이번 범위 밖).
+  - `docker-compose.prod.yaml`: top-level `secrets:` + `/run/secrets/*` + `*_FILE`
+    env(경로만). Fernet 키는 base compose의 `FERNET_KEY: ''`가 `_CMD`를 막으므로
+    `command:` 안에서 `export ...="$(cat /run/secrets/airflow_fernet_key)"`.
+    admin 비번도 `cat` 방식. consumer `env_file`을 `!override ["./.env.prod"]`로
+    교체 — 운영 호스트에 dev `.env`가 남아도 시크릿이 주입되지 않게.
+  - `.env.example` 3블록 재구성, `.env.prod.example`, `secrets/README.md`,
+    `.gitignore`(`/secrets/*` + README 예외, `.env.prod`).
+  - `docs/adr/0006-secret-management.md`(Docker secrets + AWS Secrets Manager 설계),
+    `SECURITY.md`(회전·만료 절, `_FILE` 경로), CI에 오버레이 `config -q` 스텝.
+- 범위 외: OpenSearch 정식 인증서·`internal_users`·Kafka SASL·non-root(#118),
+  Fernet 키 회전 실행 절차(#119), Airflow 앱 시크릿 매니저 이관(#119/#120),
+  Kafka UI 비번(Spring `_FILE` 미지원, 127.0.0.1 전용).
+- 검증: pytest 207개, 커버리지 57.75%, ruff `E9,F`, compileall, base·오버레이
+  `docker compose config -q`, `git diff --check`, gitleaks(142 커밋) 통과. 격리
+  Compose(prod 오버레이)로 kafka·opensearch·consumer 기동 →
+  `docker inspect`/`/proc/1/environ`에 더미 시크릿 값 부재(`*_FILE` 경로만),
+  로더가 secret 파일 정상 읽음, dev `.env` 누출값 미주입, consumer가 파일 비번으로
+  OpenSearch 인증 시도(더미라 401 — 값 사용 확인), Kafka 컨슈머 정상 조인.

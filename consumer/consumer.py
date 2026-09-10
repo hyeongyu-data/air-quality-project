@@ -32,6 +32,7 @@ try:  # noqa: SIM105
         grade_signature, should_send, core_indices_unknown,
     )
     from .alert import AlertManager
+    from .secretstore import read_secret
 except ImportError:
     # 직접 실행 시
     import opensearch_setup
@@ -42,6 +43,7 @@ except ImportError:
         AlertRuleEngine, AlertGrouping, grade_signature, should_send, core_indices_unknown,
     )
     from alert import AlertManager
+    from secretstore import read_secret
 
 # 환경변수 로드
 load_dotenv()
@@ -82,7 +84,7 @@ class OpenSearchConnector:
         # TLS·인증을 켠다 — docker-compose.prod.yaml 참고.
         use_ssl = os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true"
         user = os.getenv("OPENSEARCH_USER")
-        password = os.getenv("OPENSEARCH_PASSWORD")
+        password = read_secret("OPENSEARCH_PASSWORD")
         return OpenSearch(
             hosts=[{"host": self.host, "port": self.port}],
             http_auth=(user, password) if user and password else None,

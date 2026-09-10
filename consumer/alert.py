@@ -17,9 +17,11 @@ from typing import Dict, List, Optional
 try:
     from .rules import should_record_signature
     from . import opensearch_setup
+    from .secretstore import read_secret
 except ImportError:  # 직접 실행 시
     from rules import should_record_signature
     import opensearch_setup
+    from secretstore import read_secret
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
@@ -186,7 +188,7 @@ class SlackAlertSender:
     
     def __init__(self):
         """Slack Webhook URL 초기화"""
-        self.webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+        self.webhook_url = read_secret("SLACK_WEBHOOK_URL")
         self.enabled = os.getenv("SLACK_ENABLED", "false").lower() == "true"
     
     def send(self, alert_data: Dict) -> bool:
@@ -540,7 +542,7 @@ class EmailAlertSender:
         self.smtp_host = os.getenv("SMTP_HOST")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_username = os.getenv("SMTP_USERNAME")
-        self.smtp_password = os.getenv("SMTP_PASSWORD")
+        self.smtp_password = read_secret("SMTP_PASSWORD")
         self.from_email = os.getenv("SMTP_FROM_EMAIL") or self.smtp_username
         self.use_ssl = os.getenv("SMTP_USE_SSL", "false").lower() == "true"
         self.use_tls = os.getenv("SMTP_USE_TLS", "true").lower() == "true"
@@ -618,13 +620,13 @@ class KakaoAlertSender:
     def __init__(self):
         """카카오 API 설정 초기화"""
         self.enabled = os.getenv("KAKAO_ENABLED", "false").lower() == "true"
-        self.rest_api_key = os.getenv("KAKAO_REST_API_KEY")
-        self.client_secret = os.getenv("KAKAO_CLIENT_SECRET")
+        self.rest_api_key = read_secret("KAKAO_REST_API_KEY")
+        self.client_secret = read_secret("KAKAO_CLIENT_SECRET")
         self.state_path = Path(
             os.getenv("KAKAO_TOKEN_STATE_PATH", self.DEFAULT_STATE_PATH)
         )
         # 회전으로 저장해 둔 토큰이 있으면 그쪽이 최신이다.
-        self.refresh_token = self._load_refresh_token() or os.getenv("KAKAO_REFRESH_TOKEN")
+        self.refresh_token = self._load_refresh_token() or read_secret("KAKAO_REFRESH_TOKEN")
 
     def _load_refresh_token(self) -> Optional[str]:
         """상태 파일에 저장된 refresh token을 읽는다. 실패는 무시하고 env로 폴백."""
