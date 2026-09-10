@@ -96,7 +96,7 @@ http://localhost:8088/kakao/callback
 python3 scripts/kakao_get_refresh_token.py
 ```
 
-카카오는 refresh token의 잔여 유효기간이 짧아지면 갱신 응답에 새 토큰을 함께 줍니다. Consumer는 이 회전 값을 `KAKAO_TOKEN_STATE_PATH`(기본 `./.kakao_token.json`, 권한 600)에 저장하고 다음 기동 시 환경변수보다 우선해 읽습니다. 저장하지 않으면 기존 토큰 만료 시점에 카카오 알림이 영구 중단됩니다. 컨테이너를 재생성해도 유지하려면 이 경로를 볼륨에 올려야 합니다.
+카카오는 refresh token의 잔여 유효기간이 짧아지면 갱신 응답에 새 토큰을 함께 줍니다. Consumer는 이 회전 값을 `KAKAO_TOKEN_STATE_PATH`(Compose 기본 `/app/state/kakao_token.json`, 권한 600)에 원자적으로 저장하고 다음 기동 시 환경변수보다 우선해 읽습니다. 저장하지 않으면 기존 토큰 만료 시점에 카카오 알림이 영구 중단됩니다. 기본 Compose의 `consumer_state` 명명 볼륨이 `/app/state`를 보존하므로 컨테이너를 재생성해도 토큰과 쿨다운 캐시가 유지됩니다.
 
 브라우저에서 카카오 로그인/동의를 마치면 터미널에 `KAKAO_REFRESH_TOKEN`이 출력됩니다. 이 값을 `.env`에 저장하면 Consumer가 Kafka 메시지를 처리할 때마다 refresh token으로 access token을 새로 받아 카카오톡 나에게 보내기를 수행합니다.
 
@@ -182,4 +182,3 @@ docker compose exec airflow airflow users reset-password --username airflow --pa
 ### Airflow LocalExecutor/SQLite 오류
 
 로컬 compose는 SQLite와 호환되는 `SequentialExecutor`를 사용합니다. `LocalExecutor`로 바꾸려면 Airflow 메타DB를 PostgreSQL 등으로 교체해야 합니다.
-

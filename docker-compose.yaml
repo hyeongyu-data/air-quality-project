@@ -11,6 +11,8 @@ volumes:
     driver: local
   opensearch_data:
     driver: local
+  consumer_state:
+    driver: local
 
 services:
   # ============================================================================
@@ -224,6 +226,13 @@ services:
       TZ: Asia/Seoul
       PYTHONUNBUFFERED: '1'
       PYTHONIOENCODING: 'utf-8'
+      KAKAO_TOKEN_STATE_PATH: /app/state/kakao_token.json
+      SIGNATURE_STATE_PATH: /app/state/signature_state.json
+
+    # 카카오 refresh token과 쿨다운 캐시를 컨테이너 재생성 후에도 보존한다.
+    # 시크릿·운영 상태이므로 호스트 경로 대신 명명 볼륨을 사용한다.
+    volumes:
+      - consumer_state:/app/state
     
     # 의존성
     depends_on:
