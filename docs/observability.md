@@ -77,16 +77,27 @@ a·b·c·d·g 는 `consumer/alert_watch.py` 가 평가한다 — Consumer 이미
 `scripts/check_storage_health.sh` 가 호스트에서 잰다(컨테이너 안 `df` 는 VM 디스크라
 호스트 압박을 못 잼). e·h 는 이미 배선.
 
-**cron** (호스트, 저장소 루트에서):
+**cron** (호스트, 저장소 루트에서). **운영 프로필은 오버레이를 함께 걸어야 한다** —
+안 걸면 base compose 로 붙어(평문 `opensearch:9200`, `.env`, `weather_writer` 없음)
+`collect()` 가 실패하고(rc 2) `ALERT_WATCH_SLACK_ENABLED`(`.env.prod`)도 안 읽힌다.
 
 ```cron
+# 운영 (docker-compose.prod.yaml 오버레이)
+COMPOSE_FILE=docker-compose.yaml:docker-compose.prod.yaml
+KAFKA_UI_PASSWORD=...   # 오버레이 보간용 (compose 가 요구)
 */15 * * * *  cd /path/to/repo && flock -n /tmp/aq-alert.lock docker compose run --rm --no-deps -T consumer python consumer/alert_watch.py >> /var/log/aq-alert.log 2>&1
-*/15 * * * *  cd /path/to/repo && scripts/check_storage_health.sh >> /var/log/aq-storage.log 2>&1
+*/15 * * * *  cd /path/to/repo && OPENSEARCH_HEALTH_URL='https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' scripts/check_storage_health.sh >> /var/log/aq-storage.log 2>&1
+
+# 개발 (base compose)
+# */15 * * * *  cd /path/to/repo && flock -n /tmp/aq-alert.lock docker compose run --rm --no-deps -T consumer python consumer/alert_watch.py >> /var/log/aq-alert.log 2>&1
 ```
 
 - `run --rm` 이지 `exec` 가 아니다 — Consumer 가 죽어 있어도 돌아야 하고(그 자체가
   조건 a·d), `exec` 는 "컨테이너 다운" 과 "알람 발화" 를 exit code 로 못 가른다.
-- `flock -n` 으로 겹침 방지.
+- `flock -n` 으로 겹침 방지. `run --rm` 은 프로세스가 SIGKILL 되면 멈춘 컨테이너를
+  남길 수 있으니 가끔 `docker compose rm -f` 로 정리한다.
+- 운영에서 `check_storage_health.sh` 의 `OPENSEARCH_HEALTH_URL` 을 https 로 덮지
+  않으면 TLS 때문에 g 오탐이 15분마다 뜬다.
 
 **환경변수** (`.env` / `.env.prod`):
 

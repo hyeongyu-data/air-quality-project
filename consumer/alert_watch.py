@@ -31,6 +31,8 @@ logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
+# kafka-python은 연결·메타데이터 갱신마다 INFO를 쏟아 cron 로그를 채운다.
+logging.getLogger("kafka").setLevel(logging.WARNING)
 logger = logging.getLogger("alert_watch")
 
 STATE_PATH = Path(os.getenv("ALERT_WATCH_STATE_PATH", "/app/state/alert_watch_cooldown.json"))

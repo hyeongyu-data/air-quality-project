@@ -265,16 +265,21 @@ DISK_USAGE_THRESHOLD=80 ./scripts/check_storage_health.sh
 `check_storage_health.sh`가 담당합니다. 기준의 단일 출처와 환경변수 표는
 [observability.md "자동 발송"](observability.md)에 있습니다.
 
-**cron** (호스트, 저장소 루트):
+**cron** (호스트, 저장소 루트). 전체 예시·설명은 [observability.md "자동 발송"](observability.md).
 
 ```cron
+COMPOSE_FILE=docker-compose.yaml:docker-compose.prod.yaml
+KAFKA_UI_PASSWORD=...
 */15 * * * *  cd /path/to/repo && flock -n /tmp/aq-alert.lock docker compose run --rm --no-deps -T consumer python consumer/alert_watch.py >> /var/log/aq-alert.log 2>&1
-*/15 * * * *  cd /path/to/repo && scripts/check_storage_health.sh >> /var/log/aq-storage.log 2>&1
+*/15 * * * *  cd /path/to/repo && OPENSEARCH_HEALTH_URL='https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' scripts/check_storage_health.sh >> /var/log/aq-storage.log 2>&1
 ```
 
-- 운영에서는 `.env.prod`에 `ALERT_WATCH_SLACK_ENABLED=true`가 있어야 실제 발송됩니다
-  (없으면 dry-run 로그만). `SLACK_WEBHOOK_URL`은 `secrets/slack_webhook_url`.
+- **운영은 `COMPOSE_FILE`로 오버레이를 함께 걸어야** 합니다 — 안 걸면 base로 붙어
+  (평문 opensearch, `.env`) `collect()`가 실패하고 `.env.prod`의
+  `ALERT_WATCH_SLACK_ENABLED=true`도 안 읽혀 dry-run에 머뭅니다.
+- `SLACK_WEBHOOK_URL`은 `secrets/slack_webhook_url`(오버레이가 `_FILE`로 주입).
 - `run --rm`이지 `exec`가 아닙니다 — Consumer가 죽어 있어도(그 자체가 알람) 돌아야 합니다.
+  SIGKILL 시 멈춘 컨테이너가 남을 수 있으니 가끔 `docker compose rm -f`로 정리합니다.
 
 **알람 수신 시**:
 
