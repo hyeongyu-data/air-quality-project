@@ -31,7 +31,7 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - 완료 기준:
   - [x] 파티션별 실패·후속 레코드·다중 파티션 시나리오 테스트
   - [x] 커밋 실패·seek 실패·Consumer 재시작 시나리오 테스트
-  - [ ] 실제 Kafka 통합 검증 또는 Docker 상태 기록
+  - [x] 실제 Kafka 통합 검증: malformed JSON 1건을 `seoul-weather`에 주입하고 DLQ 격리 확인
   - [x] DLQ 복구 절차와 중복 발송 한계 문서화
   - [x] pytest 201개, ruff, compileall, Compose 설정 검증 통과
   - [x] 시크릿 검사 및 Second Brain 기록 갱신
@@ -43,6 +43,6 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - Issue #104와 이슈 번호 브랜치를 사용했다. P0-1 변경은 P0-2와 별도 커밋·PR로 유지한다.
 - 파티션별 완료 오프셋, DLQ 실패 위치 되감기, 실패 파티션 후속 처리 중단, 커밋·seek 실패 시 연결 폐기를 구현했다.
 - 검증: pytest 201개 통과, 커버리지 57.41%, ruff `E9,F`, compileall, Compose 설정, diff check 통과.
-- Docker 명령은 현재 출력 없이 응답하지 않아 실제 Kafka 통합 검증은 미완료로 기록한다. 단위 테스트를 통합 검증으로 간주하지 않는다.
+- Docker가 복구되어 `airquality` 격리 Compose로 Kafka·OpenSearch·Airflow·Consumer를 기동했다. 외부 알림 없이 malformed JSON 1건을 `seoul-weather`에 주입했고 `seoul-weather-dlq`에서 원인·파티션·오프셋·raw payload를 확인했다.
 - 리뷰 반영: 완료 오프셋을 rewind보다 먼저 커밋, DLQ Producer 멱등성 활성화, 배치 처리량 주석 정정, 순서·커밋 실패 회귀 테스트 추가(`7aa170b`).
 - 다음 게이트: CI 재실행과 리뷰 확인 후 Ready/merge 승인.
