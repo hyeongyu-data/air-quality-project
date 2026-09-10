@@ -1,7 +1,10 @@
 """weather_writer 최소 권한 계정이 실수로 넓어지지 않게 잡는 가드 (#118).
 
-YAML 파서 의존성을 추가하지 않으려고 텍스트 검사로 한다. 실제 권한 경계는
-격리 Compose 검증(403 확인)에서 본다 — 여기는 회귀 방지선.
+YAML 파서 의존성을 추가하지 않으려고 텍스트 검사로 한다. **한계**: OpenSearch
+action group(`crud` 등)이 어떤 하위 액션으로 펼쳐지는지는 여기서 못 본다 —
+`'*'` 문자열이 없다는 검사는 그래서 완전한 보증이 아니다. 실제 권한 경계는
+격리 Compose 검증(403 확인)에서 본다. 여기는 명백한 확장(전역 패턴·admin
+와일드카드)만 잡는 회귀 방지선이다.
 """
 from pathlib import Path
 
@@ -45,10 +48,25 @@ def test_weather_writer_user_maps_only_to_weather_manager():
         assert forbidden not in block, f"weather_writer에 과한 역할: {forbidden}"
 
 
-def test_demo_admin_hash_preserved_for_healthcheck():
-    # prod healthcheck가 admin:admin을 쓴다 — 데모 해시를 바꾸면 깨진다
+def test_unused_demo_users_removed():
+    # 알려진 비밀번호를 가진 데모 계정이 weather-network 안에서 접근 가능하면 안 된다
+    users = (CFG / "internal_users.yml").read_text(encoding="utf-8")
+    for gone in ("anomalyadmin:", "kibanaro:", "logstash:", "readall:", "snapshotrestore:"):
+        assert gone not in users, f"안 쓰는 데모 계정이 남아 있다: {gone}"
+
+
+def test_admin_kept_as_break_glass_with_pinned_demo_hash():
+    # admin은 break-glass로 남긴다. 데모 해시는 이미지 2.8.0에 고정 — 바뀌면 알아채야 한다
     users = (CFG / "internal_users.yml").read_text(encoding="utf-8")
     assert "$2a$12$VcCDgh2NDk07JGN0rjGbM.Ad41qVR/YFJcgHp0UGns5JDymv..TOG" in users
+
+
+def test_internal_users_are_only_the_three_we_keep():
+    import re
+    users = (CFG / "internal_users.yml").read_text(encoding="utf-8")
+    # 최상위 매핑 키(들여쓰기 없이 `이름:` 으로 끝나는 줄)만
+    defined = set(re.findall(r"^([a-z_][a-z0-9_]*):\s*$", users, re.MULTILINE)) - {"_meta"}
+    assert defined == {"admin", "kibanaserver", "weather_writer"}, defined
 
 
 def test_all_ten_security_files_present():

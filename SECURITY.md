@@ -137,10 +137,11 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
 | 불필요 포트(9093 controller·9600 perf) | 호스트 매핑됨 | **매핑 제거** |
 | 시크릿 주입 | `.env` 평문(`env_file` → 컨테이너 env) | **Docker secrets** — `./secrets/*` → `/run/secrets/*`, `*_FILE`로 읽음. consumer `env_file`은 `.env.prod`(비밀 아님)로 교체 |
 | Airflow 계정/Fernet 키 | `airflow/airflow`, 빈 키 | **secret 파일 필수 — 비었거나 없으면 기동 중단(`test -s`)** |
-| OpenSearch 접근 | 보안 플러그인 off, http | **TLS + 핀된 CA 체인 검증** (무인증 401) |
-| OpenSearch 계정 | (없음) | Consumer는 **`weather_writer` 최소 권한** — `weather-*` 데이터·템플릿·ISM만. `admin`은 break-glass |
+| OpenSearch 접근 | 보안 플러그인 off, http | **TLS + 핀된 CA 체인 검증** (무인증 401), healthcheck도 `weather_writer` |
+| OpenSearch 계정 | (없음) | 안 쓰는 데모 계정 5개 제거. Consumer는 **`weather_writer` 최소 권한** — `weather-*` 데이터·템플릿·ISM만. `admin`은 break-glass(데모 해시 유지 — 회전은 `securityadmin.sh` 필요, 자체 CA 도입과 함께) |
 | Kafka UI | 무인증, 동적 설정 허용 | **로그인 강제**, 동적 설정 차단 |
 | Consumer 컨테이너 | root | **non-root (uid 10001)** |
+| OpenSearch Dashboards | http, 보안 off | **prod 오버레이와 비호환** — `--profile ops` 는 dev 전용 |
 
 필요 파일: `./secrets/{slack_webhook_url,smtp_password,kakao_rest_api_key,kakao_client_secret,kakao_refresh_token,opensearch_password,airflow_fernet_key,airflow_admin_password}` · `.env.prod` · `./config/opensearch-security/`(커밋됨) · compose 보간용 `.env`의 `KAFKA_UI_PASSWORD`
 
@@ -157,13 +158,19 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
 
 ### 기존 볼륨 주의
 
-`weather_writer` 계정과 non-root는 **새 볼륨**에서만 자동 반영된다.
+`weather_writer` 계정과 non-root는 **새 볼륨**에서만 자동 반영된다. `<프로젝트>`는
+compose 프로젝트명(기본은 디렉터리명 `air-quality-project`, `-p` 로 지정 가능).
 
-- `opensearch_data` 볼륨이 이미 있으면 `.opendistro_security` 인덱스가 남아 있어
-  마운트된 `config/opensearch-security/*.yml`이 무시된다 →
-  `docker compose ... down -v` 후 재기동, 또는 `securityadmin.sh -cd ...` 수동 반영.
-- `consumer_state` 볼륨이 root 소유로 만들어져 있으면 non-root Consumer가 못 쓴다
-  → `down -v` 또는 `docker run --rm -v aq_consumer_state:/s alpine chown -R 10001:10001 /s`.
+- `<프로젝트>_opensearch_data` 볼륨이 이미 있으면 `.opendistro_security` 인덱스가
+  남아 있어 마운트된 `config/opensearch-security/*.yml`이 무시된다 →
+  `docker compose ... down -v` 후 재기동, 또는 컨테이너 안에서
+  `plugins/opensearch-security/tools/securityadmin.sh -cd config/opensearch-security
+  -icl -nhnv -cacert config/root-ca.pem -cert config/kirk.pem -key config/kirk-key.pem`.
+- `<프로젝트>_consumer_state` 볼륨이 root 소유로 만들어져 있으면 non-root Consumer가
+  `/app/state` 에 못 쓴다. 그러면 **쿨다운 상태가 fail-open** 으로 떨어져 같은
+  경보가 여러 채널로 중복 발송되고, **카카오 토큰 회전 저장이 조용히 실패**한다.
+  → `down -v`, 또는
+  `docker run --rm -v <프로젝트>_consumer_state:/s alpine chown -R 10001:10001 /s`.
 
 ### 검증 절차
 
@@ -184,7 +191,7 @@ curl -sk -o /dev/null -w '%{http_code}\n' -u weather_writer:$PW -XPUT https://lo
 curl -sk -o /dev/null -w '%{http_code}\n' -u weather_writer:$PW https://localhost:9200/.opendistro_security/_search   # 403
 
 # 관측 UI 포트 미노출
-docker compose -p PROJ -f docker-compose.yaml -f docker-compose.prod.yaml --profile ops port kafka-ui 8080   # 출력 없음
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml port kafka-ui 8080   # 출력 없음
 ```
 
 Consumer가 `weather_writer`로 TLS+체인 검증 하에 저장까지 하는지는 유효 메시지
@@ -205,12 +212,17 @@ Consumer가 `weather_writer`로 TLS+체인 검증 하에 저장까지 하는지�
 localhost Docker 범위에서 위험도가 낮아 defer한 항목이다.
 
 - **OpenSearch·Consumer TLS는 데모 인증서**를 쓴다. 체인 검증은 켰지만 데모 CA의
-  **개인키가 공개**돼 있어(설치 스크립트에 포함) 진짜 MITM은 못 막는다.
-  - 재검토: 9200을 127.0.0.1 밖으로 열 때.
+  **개인키가 공개**돼 있어(설치 스크립트에 포함) 진짜 MITM은 못 막는다. 또한
+  `config/opensearch-root-ca.pem`(데모 CA)은 **2028-04-19 만료** — 그 전에 교체.
+  - 재검토: 9200을 127.0.0.1 밖으로 열 때, 또는 CA 만료 전.
   - 절차: `openssl`로 자체 CA + 노드/admin 인증서 생성 → `config/`에 마운트
     (파일명은 `esnode.pem`·`root-ca.pem`·`kirk.pem` 유지 → `opensearch.yml` 수정 불필요)
     → `securityadmin.sh -cacert ... -cert kirk.pem -key kirk-key.pem`로 초기화
-    → `config/opensearch-root-ca.pem`을 새 CA로 교체.
+    → `config/opensearch-root-ca.pem`을 새 CA로 교체. 이때 `admin` 비밀번호도 함께 회전.
+- **`config/opensearch-security/`는 OpenSearch 2.8.0 이미지의 데모 파일**을 vendoring
+  한 것이다(`config.yml`·`audit.yml` 등은 2023년판). 이미지 태그를 올리면 security
+  초기화가 드리프트할 수 있으므로 재-sync 한다. `config/opensearch-security/README`
+  없이 이 문단이 그 기록이다.
 - **Kafka는 compose 내부 네트워크 PLAINTEXT**다. 9092는 127.0.0.1 전용, 9093은
   호스트 미노출, 브로커는 compose 네트워크 밖으로 안 나간다.
   - 재검토: 브로커를 네트워크 밖에 열 때.

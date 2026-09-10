@@ -365,20 +365,20 @@ security_analytics_ack_alerts:
 weather_manager:
   reserved: false
   cluster_permissions:
-    - 'cluster:monitor/main'
-    - 'cluster:monitor/health'
-    - 'cluster_composite_ops'
-    - 'indices:admin/index_template/put'
+    - 'cluster:monitor/main'              # client.info() 연결 확인
+    - 'cluster:monitor/health'            # prod healthcheck (weather_writer로)
+    - 'indices:admin/index_template/put'  # opensearch_setup.ensure_index_template
     - 'indices:admin/index_template/get'
-    - 'cluster:admin/opendistro/ism/policy/write'
+    - 'cluster:admin/opendistro/ism/policy/write'  # ensure_ism_policy
     - 'cluster:admin/opendistro/ism/policy/get'
   index_permissions:
     - index_patterns:
         - 'weather-*'
       allowed_actions:
+        # Consumer는 단건 client.index() 만 한다(_bulk 안 씀) — cluster_composite_ops
+        # (aliases*·reindex 를 클러스터 스코프로 부여)는 제거했다.
         - 'crud'
         - 'create_index'
         - 'indices:admin/mapping/put'
         - 'indices:admin/settings/update'
-        - 'indices:admin/aliases'
         - 'indices:admin/refresh*'

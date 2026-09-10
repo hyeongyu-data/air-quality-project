@@ -232,3 +232,6 @@ outputs/
 
 # 쿨다운 시그니처 로컬 캐시
 .signature_state.json
+
+# 하위 에이전트 worktree (자동 생성)
+.claude/worktrees/

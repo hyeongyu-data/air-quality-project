@@ -91,6 +91,8 @@ services:
     environment:
       # 보안 플러그인 활성화 → 데모 TLS 인증서 + 인증 강제
       DISABLE_SECURITY_PLUGIN: 'false'
+    secrets:
+      - opensearch_password
     volumes:
       # 데모 security 설정을 이 저장소 버전으로 교체 — weather_writer 최소 권한
       # 계정(#118)이 추가돼 있다. 최초 부팅 시(.opendistro_security 인덱스가 없을
@@ -98,7 +100,8 @@ services:
       # 파일 10개 전체를 마운트해야 한다(부분 마운트 시 config.yml 없어서 부팅 실패).
       - ./config/opensearch-security:/usr/share/opensearch/config/opensearch-security:ro
     healthcheck:
-      test: ["CMD-SHELL", "curl -fku admin:admin 'https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
+      # admin(공개 데모 비밀번호)이 아니라 weather_writer 로 확인한다.
+      test: ["CMD-SHELL", "curl -fk -u weather_writer:$$(cat /run/secrets/opensearch_password) 'https://localhost:9200/_cluster/health?wait_for_status=yellow&timeout=5s' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -150,5 +153,10 @@ services:
       DYNAMIC_CONFIG_ENABLED: 'false'
 
   # OpenSearch Dashboards(ops 프로필)도 호스트 포트를 열지 않는다.
+  # 주의: 이 오버레이는 OpenSearch를 TLS+인증으로 바꾸지만 base compose의 OSD는
+  # http://opensearch:9200 + 보안 플러그인 off 를 가정한다. 따라서 `--profile ops`
+  # 와 이 오버레이를 함께 쓰면 OSD가 크래시루프한다. prod에서 OSD가 필요하면
+  # OPENSEARCH_HOSTS를 https로, DISABLE_SECURITY_DASHBOARDS_PLUGIN=false,
+  # kibanaserver 자격증명 배선이 선행돼야 한다(현재 범위 밖 — SECURITY.md).
   opensearch-dashboards:
     ports: !override []

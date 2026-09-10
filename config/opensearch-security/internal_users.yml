@@ -1,66 +1,33 @@
 ---
 # This is the internal user database
 # The hash value is a bcrypt hash and can be generated with plugin/tools/hash.sh
+#
+# 이 프로젝트(#118)가 OpenSearch 2.8.0 이미지의 데모 파일에서 손본 것:
+#   - 안 쓰는 데모 계정 제거(anomalyadmin·kibanaro·logstash·readall·snapshotrestore)
+#     — 알려진 비밀번호를 가진 계정이 weather-network 안에서 접근 가능한 위험 제거
+#   - weather_writer(Consumer 전용 최소 권한) 추가
+#   - admin·kibanaserver 는 유지: admin 은 break-glass·healthcheck 아님(weather_writer
+#     health check 로 전환), kibanaserver 는 reserved 라 두되 OSD-prod 는 미지원
 
 _meta:
   type: "internalusers"
   config_version: 2
 
-# Define your internal users here
-
-## Demo users
-
+# break-glass 전용. 데모 해시 그대로다 — 회전은 securityadmin.sh 가 필요하며
+# 자체 서명 CA 도입(SECURITY.md "남은 한계")과 함께 처리한다.
 admin:
   hash: "$2a$12$VcCDgh2NDk07JGN0rjGbM.Ad41qVR/YFJcgHp0UGns5JDymv..TOG"
   reserved: true
   backend_roles:
   - "admin"
-  description: "Demo admin user"
+  description: "break-glass 전용 (데모 해시)"
 
-anomalyadmin:
-  hash: "$2y$12$TRwAAJgnNo67w3rVUz4FIeLx9Dy/llB79zf9I15CKJ9vkM4ZzAd3."
-  reserved: false
-  opendistro_security_roles:
-  - "anomaly_full_access"
-  description: "Demo anomaly admin user, using internal role"
-
+# reserved 계정이라 남긴다. OSD 를 prod 오버레이와 함께 쓰려면 https+이 계정
+# 자격증명 배선이 필요하다(현재 미지원 — docker-compose.prod.yaml 참고).
 kibanaserver:
   hash: "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H."
   reserved: true
   description: "Demo OpenSearch Dashboards user"
-
-kibanaro:
-  hash: "$2a$12$JJSXNfTowz7Uu5ttXfeYpeYE0arACvcwlPBStB1F.MI7f0U9Z4DGC"
-  reserved: false
-  backend_roles:
-  - "kibanauser"
-  - "readall"
-  attributes:
-    attribute1: "value1"
-    attribute2: "value2"
-    attribute3: "value3"
-  description: "Demo OpenSearch Dashboards read only user, using external role mapping"
-
-logstash:
-  hash: "$2a$12$u1ShR4l4uBS3Uv59Pa2y5.1uQuZBrZtmNfqB3iM/.jL0XoV9sghS2"
-  reserved: false
-  backend_roles:
-  - "logstash"
-  description: "Demo logstash user, using external role mapping"
-
-readall:
-  hash: "$2a$12$ae4ycwzwvLtZxwZ82RmiEunBbIPiAmGZduBAjKN0TXdwQFtCwARz2"
-  reserved: false
-  backend_roles:
-  - "readall"
-  description: "Demo readall user, using external role mapping"
-
-snapshotrestore:
-  hash: "$2y$12$DpwmetHKwgYnorbgdvORCenv4NAK8cPUg8AI6pxLCuWf/ALc0.v7W"
-  reserved: false
-  backend_roles:
-  - "snapshotrestore"
-  description: "Demo snapshotrestore user, using external role mapping"
 
 # --- 이 프로젝트가 추가한 계정 (#118) --------------------------------------
 # Consumer 전용. weather-* 데이터·템플릿·ISM 만 다룰 수 있다(roles.yml:weather_manager).
