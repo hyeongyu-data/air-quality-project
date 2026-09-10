@@ -8,6 +8,7 @@
 import json
 
 import pytest
+from unittest.mock import Mock
 
 pytest.importorskip("requests")
 pytest.importorskip("dotenv")
@@ -15,7 +16,8 @@ pytest.importorskip("kafka")
 pytest.importorskip("opensearchpy")
 
 import producer.contract as producer_contract  # noqa: E402
-from consumer.consumer import WeatherAlertConsumer  # noqa: E402
+from consumer.consumer import KafkaWeatherConsumer, WeatherAlertConsumer  # noqa: E402
+from kafka.structs import TopicPartition, OffsetAndMetadata  # noqa: E402
 from consumer.schema import (  # noqa: E402
     REQUIRED_KEYS,
     SCHEMA_VERSION,
@@ -97,19 +99,32 @@ def test_z_suffix_timestamp_normalized():
 
 class Record:
     topic = "seoul-weather"
-    def __init__(self, value: bytes, offset: int = 0):
+    def __init__(self, value: bytes, offset: int = 0, partition: int = 0):
         self.value = value; self.offset = offset
+        self.partition = partition
 
 
 class FakeKafka:
     def __init__(self, batches):
         self._batches = list(batches)
         self.commits = 0
+        self.committed = {}
+        self.rewound = {}
+        self.reset = False
+        self.calls = []
         self.bootstrap_servers = "test:9092"
     def ensure_connection(self): return True
     def consume_batch(self, timeout_ms=5000):
         return self._batches.pop(0) if self._batches else []
-    def commit(self): self.commits += 1; return True
+    def commit(self, offsets):
+        self.calls.append(("commit", offsets))
+        self.commits += 1
+        self.committed.update(offsets)
+        return True
+    def rewind(self, offsets):
+        self.calls.append(("rewind", offsets))
+        self.rewound.update(offsets)
+    def reset_connection(self): self.reset = True
 
 
 def bare(batches, dlq_ok=True, process_ok=True):
@@ -130,7 +145,7 @@ def bare(batches, dlq_ok=True, process_ok=True):
 
 
 def test_whole_batch_is_processed_and_committed():
-    batch = [Record(encode(valid_payload(event_id=f"서울:{i}"))) for i in range(3)]
+    batch = [Record(encode(valid_payload(event_id=f"서울:{i}")), i) for i in range(3)]
     c = bare([batch])
     assert c.run_once() == 3                 # 첫 레코드만 처리하던 회귀 방지
     assert c.kafka_consumer.commits == 1
@@ -156,9 +171,102 @@ def test_dlq_failure_holds_commit_for_retry():
     c = bare([[Record(b"{broken")]], dlq_ok=False)
     c.run_once()
     assert c.kafka_consumer.commits == 0
+    assert c.kafka_consumer.rewound == {TopicPartition("seoul-weather", 0): 0}
 
 
 def test_empty_poll_is_a_noop():
     c = bare([])
     assert c.run_once() == 0
     assert c.kafka_consumer.commits == 0
+
+
+def test_failed_partition_stops_at_gap_while_other_partition_commits():
+    c = bare([[
+        Record(encode(valid_payload()), 10),
+        Record(b"{broken", 11),
+        Record(encode(valid_payload()), 12),
+        Record(encode(valid_payload()), 20, partition=1),
+    ]], dlq_ok=False)
+    c.process_message = Mock(return_value=True)
+    c.run_once()
+    assert c.process_message.call_count == 2
+    assert c.kafka_consumer.committed == {
+        TopicPartition("seoul-weather", 0): 11,
+        TopicPartition("seoul-weather", 1): 21,
+    }
+    assert c.kafka_consumer.rewound == {TopicPartition("seoul-weather", 0): 11}
+    assert [name for name, _ in c.kafka_consumer.calls] == ["commit", "rewind"]
+
+
+def test_commit_failure_discards_connection_before_next_poll():
+    c = bare([[Record(encode(valid_payload()))]])
+    c.kafka_consumer.commit = Mock(return_value=False)
+    c.run_once()
+    assert c.kafka_consumer.reset
+
+
+def test_commit_failure_with_retry_does_not_rewind_after_connection_reset():
+    c = bare([[
+        Record(encode(valid_payload()), 10),
+        Record(b"{broken", 11),
+        Record(encode(valid_payload()), 20, partition=1),
+    ]], dlq_ok=False)
+    c.kafka_consumer.commit = Mock(return_value=False)
+    c.run_once()
+    assert c.kafka_consumer.reset
+    assert c.kafka_consumer.rewound == {}
+
+
+def test_wrapper_commits_explicit_offsets():
+    wrapper = KafkaWeatherConsumer.__new__(KafkaWeatherConsumer)
+    wrapper.consumer = Mock()
+    tp = TopicPartition("seoul-weather", 0)
+    assert wrapper.commit({tp: 12})
+    wrapper.consumer.commit.assert_called_once_with(
+        offsets={tp: OffsetAndMetadata(12, "")},
+    )
+
+
+def test_failed_seek_discards_client_without_committing():
+    wrapper = KafkaWeatherConsumer.__new__(KafkaWeatherConsumer)
+    client = wrapper.consumer = Mock()
+    client.seek.side_effect = RuntimeError("partition revoked")
+    with pytest.raises(RuntimeError, match="partition revoked"):
+        wrapper.rewind({TopicPartition("seoul-weather", 0): 12})
+    assert wrapper.consumer is None
+    client.close.assert_called_once_with(autocommit=False)
+    client.commit.assert_not_called()
+
+
+def test_recovery_across_polls_and_restart_uses_failed_offset():
+    """실제 poll처럼 읽기 위치가 전진하는 모델로 커밋 생략만 하는 회귀를 잡는다."""
+    tp = TopicPartition("seoul-weather", 0)
+    records = [Record(b"{broken", 0)] + [
+        Record(encode(valid_payload(event_id=f"서울:{i}")), i) for i in (1, 2)
+    ]
+
+    class PositionedKafka(FakeKafka):
+        def __init__(self):
+            super().__init__([])
+            self.position = 0
+        def consume_batch(self, timeout_ms=5000):
+            batch = records[self.position:self.position + 2]
+            self.position += len(batch)
+            return batch
+        def rewind(self, offsets):
+            super().rewind(offsets)
+            self.position = offsets[tp]
+
+    c = bare([], dlq_ok=False)
+    c.kafka_consumer = PositionedKafka()
+    c.run_once()
+    c.run_once()  # DLQ가 계속 실패해도 뒤 정상 메시지를 커밋하지 않는다.
+    assert c.kafka_consumer.committed == {}
+    assert c.kafka_consumer.position == 0
+    c.kafka_consumer.position = c.kafka_consumer.committed.get(tp, 0)  # 재시작
+    c._send_to_dlq = Mock(return_value=True)
+    c.run_once()
+    assert c.kafka_consumer.committed[tp] == 2
+    c._send_to_dlq.assert_called_once()
+    c.run_once()
+    assert c.kafka_consumer.committed[tp] == 3

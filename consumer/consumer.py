@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Dict, Optional, List
 from kafka import KafkaConsumer, KafkaProducer
+from kafka.structs import TopicPartition, OffsetAndMetadata
 from opensearchpy import OpenSearch
 from dotenv import load_dotenv
 
@@ -333,16 +334,34 @@ class KafkaWeatherConsumer:
             logger.error(f"메시지 구독 오류: {str(e)}")
             return []
 
-    def commit(self) -> bool:
-        """현재 poll 위치까지 오프셋을 커밋한다."""
+    def commit(self, offsets: Dict) -> bool:
+        """파티션별 연속 처리 완료 지점까지만 커밋한다."""
         if not self.consumer:
             return False
         try:
-            self.consumer.commit()
+            self.consumer.commit(offsets={
+                partition: OffsetAndMetadata(offset, "")
+                for partition, offset in offsets.items()
+            })
             return True
         except Exception as e:
-            logger.error(f"오프셋 커밋 실패(배치 재처리됨): {str(e)}")
+            logger.error(f"오프셋 커밋 실패: {str(e)}")
             return False
+
+    def rewind(self, offsets: Dict) -> None:
+        """다음 poll이 실패 위치부터 읽게 한다. 복원 실패 시 연결을 폐기한다."""
+        try:
+            for partition, offset in offsets.items():
+                self.consumer.seek(partition, offset)
+        except Exception:
+            self.reset_connection()
+            raise
+
+    def reset_connection(self) -> None:
+        """읽기 위치를 버리고 재연결 시 브로커의 커밋 위치에서 복구한다."""
+        client, self.consumer = self.consumer, None
+        if client is not None:
+            client.close(autocommit=False)
     
     def close(self):
         """컨슈머 종료"""
@@ -509,8 +528,8 @@ class WeatherAlertConsumer:
     def _send_to_dlq(self, record, reason: str) -> bool:
         """처리 불가 메시지를 DLQ 토픽으로 격리한다.
 
-        DLQ 발행이 실패하면 False — 호출측이 커밋을 보류해 배치가 재처리된다.
-        메시지를 버리는 것보다 재시도가 낫다.
+        DLQ 발행이 실패하면 False를 반환한다. 호출측은 해당 파티션을 실패
+        오프셋으로 되돌려 재처리한다. 메시지를 버리는 것보다 재시도가 낫다.
         """
         try:
             if self._dlq_producer is None:
@@ -518,10 +537,12 @@ class WeatherAlertConsumer:
                     bootstrap_servers=self.kafka_consumer.bootstrap_servers,
                     value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
                     acks="all",
+                    enable_idempotence=True,
                 )
             self._dlq_producer.send(self.dlq_topic, {
                 "reason": reason,
                 "source_topic": record.topic,
+                "source_partition": record.partition,
                 "source_offset": record.offset,
                 "failed_at": now_kst().isoformat(),
                 "raw": record.value.decode("utf-8", errors="replace") if record.value else None,
@@ -544,8 +565,8 @@ class WeatherAlertConsumer:
             self.process_message(message)
             return "ok"
         except Exception as e:
-            # process_message는 내부에서 예외를 삼키지만, 여기까지 오는 예외는
-            # 메시지 자체가 처리 불가라는 뜻이다. 무한 재시도 대신 격리한다.
+            # 현재 정책은 처리 예외도 DLQ로 격리한다.
+            # 일시 장애와 영구 오류의 분류는 별도 후속 작업이다.
             return "dlq" if self._send_to_dlq(record, f"처리 예외: {e}") else "dlq_failed"
 
     def run_once(self) -> int:
@@ -566,14 +587,27 @@ class WeatherAlertConsumer:
             logger.debug("대기 중인 메시지 없음")
             return 0
 
-        results = [self.handle_record(record) for record in records]
+        completed = {}
+        retry = {}
+        for record in records:
+            partition = TopicPartition(record.topic, record.partition)
+            # 같은 파티션의 실패 뒤 레코드는 처리하지 않는다. 다른 파티션은 진행한다.
+            if partition in retry:
+                continue
+            result = self.handle_record(record)
+            if result == "dlq_failed":
+                retry[partition] = record.offset
+            else:
+                completed[partition] = record.offset + 1
 
-        # DLQ 발행까지 실패한 레코드가 있으면 커밋하지 않는다 → 배치 재처리.
-        # 정상 처리분의 중복은 event_id upsert와 등급 시그니처가 흡수한다.
-        if "dlq_failed" in results:
-            logger.error("배치에 격리 실패 레코드 존재 → 커밋 보류")
-        else:
-            self.kafka_consumer.commit()
+        # 정상 파티션의 완료 지점을 먼저 커밋한다. 이후 rewind/연결 오류가
+        # 발생해도 정상 파티션의 이미 처리한 레코드를 불필요하게 재처리하지 않는다.
+        if completed and not self.kafka_consumer.commit(completed):
+            # 리밸런스 등 커밋 실패 후에는 이전 소유권/읽기 위치를 재사용하지 않는다.
+            self.kafka_consumer.reset_connection()
+        elif retry:
+            # 커밋을 생략해도 poll 위치는 이미 전진했으므로 명시적으로 되돌린다.
+            self.kafka_consumer.rewind(retry)
         return len(records)
 
     def _handle_signal(self, signum, frame) -> None:
@@ -607,8 +641,8 @@ class WeatherAlertConsumer:
         구분되지 않았고, 재시작 시점의 연결 실패가 1시간 동안 고정됐다.
         수명 관리는 컨테이너 오케스트레이터의 일이다.
 
-        처리량 상한: max_poll_records=1 + poll_interval sleep이라
-        초당 약 1/poll_interval 건이다. 하루 4건 워크로드에는 충분하다.
+        처리량 상한: max_poll_records=10 + poll_interval sleep이다. 하루 4건
+        워크로드에는 충분하며, 처리량을 늘릴 때는 파티션별 커밋 순서를 함께 검증한다.
         """
         self._running = True
         signal.signal(signal.SIGTERM, self._handle_signal)

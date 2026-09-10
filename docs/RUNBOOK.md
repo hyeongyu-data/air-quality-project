@@ -173,6 +173,34 @@ docker compose exec airflow airflow users reset-password --username airflow --pa
 
 예전에는 권한이 없을 때 PM10 평균을 황사 대체값으로 썼습니다. 그런데 황사 판정의 "좋음" 임계가 150㎍/㎥라 서울 PM10 평균으로는 사실상 항상 "좋음"이 나왔습니다. **감시되는 것처럼 보이지만 실제로는 아무것도 감시하지 않는 지표**였기 때문에 제거했습니다. 모른다를 괜찮다로 바꾸지 않는다는 원칙은 다른 지수와 같습니다.
 
+### DLQ 메시지와 Consumer 오프셋 복구
+
+깨진 JSON, 지원하지 않는 스키마, 필수 키 누락 또는 처리 예외는
+`seoul-weather-dlq`(환경변수 `KAFKA_DLQ_TOPIC`으로 변경 가능)로 격리됩니다.
+DLQ 발행까지 실패하면 해당 파티션의 읽기 위치를 실패 오프셋으로 되돌리고
+후속 레코드를 처리하지 않습니다. 다른 파티션은 계속 처리하며, 파티션별
+연속 완료 위치만 커밋합니다. Consumer 재시작 시 브로커에 저장된 마지막
+커밋 위치부터 다시 읽습니다.
+
+```bash
+# DLQ 원인·원본 파티션·오프셋 확인
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:9092 \
+  --topic "${KAFKA_DLQ_TOPIC:-seoul-weather-dlq}" \
+  --from-beginning
+
+# 컨슈머 그룹의 파티션별 현재/끝 오프셋 확인
+docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
+  --bootstrap-server kafka:9092 \
+  --group weather-alert-group --describe
+```
+
+원인을 수정한 뒤에는 DLQ의 `raw` payload를 검토하고, 운영 토픽에 직접
+재발행하기 전에 테스트 토픽에서 `event_id`와 외부 발송 결과를 확인합니다.
+현재 자동 DLQ 재처리 명령은 제공하지 않으며, 재처리 시 중복 외부 발송
+가능성을 검토해야 합니다. DLQ 발행 실패·커밋 실패·브로커 재시작 복구는
+실제 Kafka 통합 테스트가 필요합니다.
+
 ### Airflow 메타DB
 
 메타DB(SQLite)는 홈 볼륨 `airflow_home`에 있어 컨테이너를 재생성해도 DAG on/off 상태와 실행 이력이 유지됩니다. 초기화하려면 `docker compose down -v`로 볼륨까지 지웁니다.

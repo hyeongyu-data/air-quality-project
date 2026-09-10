@@ -232,7 +232,7 @@ docker exec pj-kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 
 오프셋은 **처리(판정·저장·발송 시도)가 끝난 뒤에만 커밋**합니다(at-least-once). 자동 커밋은 처리 실패 메시지를 조용히 유실했습니다. 재처리로 생기는 중복은 `event_id` upsert와 등급 시그니처 쿨다운이 흡수합니다.
 
-처리할 수 없는 메시지(깨진 JSON, 지원하지 않는 `schema_version`, 필수 키 누락, 처리 예외)는 **DLQ 토픽**(`KAFKA_DLQ_TOPIC`, 기본 `seoul-weather-dlq`)으로 격리한 뒤 오프셋을 전진시킵니다 — poison pill이 소비를 막지 않습니다. DLQ 발행조차 실패하면 커밋을 보류해 배치를 재처리합니다.
+처리할 수 없는 메시지(깨진 JSON, 지원하지 않는 `schema_version`, 필수 키 누락, 처리 예외)는 **DLQ 토픽**(`KAFKA_DLQ_TOPIC`, 기본 `seoul-weather-dlq`)으로 격리한 뒤 오프셋을 전진시킵니다 — poison pill이 소비를 막지 않습니다. DLQ 발행조차 실패하면 해당 파티션의 후속 처리를 멈추고 읽기 위치를 실패 오프셋으로 되돌립니다. 다른 파티션은 계속 처리하며, 파티션별 연속 처리 완료 지점까지만 커밋합니다. 커밋 실패 시 연결을 폐기하고 다음 연결에서 브로커의 커밋 위치부터 복구합니다. 이 경우 이미 발송한 알림의 중복 가능성은 남습니다.
 
 ```bash
 # 격리된 메시지와 사유 확인
