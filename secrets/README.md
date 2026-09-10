@@ -24,6 +24,8 @@
 | `opensearch_password` | Consumer 전용 `weather_writer` 계정 비밀번호 (기본 `weatherwriter`). 교체 시 `config/opensearch-security/internal_users.yml`의 해시도 `scripts/opensearch_hash.sh`로 재생성 |
 | `airflow_fernet_key` | Airflow Fernet 키 |
 | `airflow_admin_password` | Airflow 관리자 비밀번호 |
+| `postgres_password` | Airflow 메타DB(PostgreSQL) 비밀번호 (#119) |
+| `airflow_db_conn` | 전체 SQLAlchemy DSN — `postgres_password`와 **같은 비밀번호** |
 
 ## 생성
 
@@ -39,6 +41,12 @@ printf %s "$KAKAO_REFRESH_TOKEN_VALUE" > secrets/kakao_refresh_token
 printf %s "admin"                    > secrets/opensearch_password
 python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" | tr -d '\n' > secrets/airflow_fernet_key
 printf %s "$AIRFLOW_ADMIN_PASSWORD_VALUE" > secrets/airflow_admin_password
+
+# 메타DB — 한 비밀번호에서 두 파일 (#119)
+PGPW="$(openssl rand -base64 18 | tr -d '/+=')"
+printf %s "$PGPW" > secrets/postgres_password
+printf 'postgresql+psycopg2://airflow:%s@postgres:5432/airflow' "$PGPW" > secrets/airflow_db_conn
+
 chmod 600 secrets/*
 ```
 
