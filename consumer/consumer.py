@@ -528,8 +528,8 @@ class WeatherAlertConsumer:
     def _send_to_dlq(self, record, reason: str) -> bool:
         """처리 불가 메시지를 DLQ 토픽으로 격리한다.
 
-        DLQ 발행이 실패하면 False — 호출측이 커밋을 보류해 배치가 재처리된다.
-        메시지를 버리는 것보다 재시도가 낫다.
+        DLQ 발행이 실패하면 False를 반환한다. 호출측은 해당 파티션을 실패
+        오프셋으로 되돌려 재처리한다. 메시지를 버리는 것보다 재시도가 낫다.
         """
         try:
             if self._dlq_producer is None:
@@ -537,6 +537,7 @@ class WeatherAlertConsumer:
                     bootstrap_servers=self.kafka_consumer.bootstrap_servers,
                     value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
                     acks="all",
+                    enable_idempotence=True,
                 )
             self._dlq_producer.send(self.dlq_topic, {
                 "reason": reason,
@@ -599,12 +600,14 @@ class WeatherAlertConsumer:
             else:
                 completed[partition] = record.offset + 1
 
-        # 커밋을 생략해도 poll 위치는 이미 전진했으므로 명시적으로 되돌린다.
-        if retry:
-            self.kafka_consumer.rewind(retry)
+        # 정상 파티션의 완료 지점을 먼저 커밋한다. 이후 rewind/연결 오류가
+        # 발생해도 정상 파티션의 이미 처리한 레코드를 불필요하게 재처리하지 않는다.
         if completed and not self.kafka_consumer.commit(completed):
             # 리밸런스 등 커밋 실패 후에는 이전 소유권/읽기 위치를 재사용하지 않는다.
             self.kafka_consumer.reset_connection()
+        elif retry:
+            # 커밋을 생략해도 poll 위치는 이미 전진했으므로 명시적으로 되돌린다.
+            self.kafka_consumer.rewind(retry)
         return len(records)
 
     def _handle_signal(self, signum, frame) -> None:
@@ -638,8 +641,8 @@ class WeatherAlertConsumer:
         구분되지 않았고, 재시작 시점의 연결 실패가 1시간 동안 고정됐다.
         수명 관리는 컨테이너 오케스트레이터의 일이다.
 
-        처리량 상한: max_poll_records=1 + poll_interval sleep이라
-        초당 약 1/poll_interval 건이다. 하루 4건 워크로드에는 충분하다.
+        처리량 상한: max_poll_records=10 + poll_interval sleep이다. 하루 4건
+        워크로드에는 충분하며, 처리량을 늘릴 때는 파티션별 커밋 순서를 함께 검증한다.
         """
         self._running = True
         signal.signal(signal.SIGTERM, self._handle_signal)

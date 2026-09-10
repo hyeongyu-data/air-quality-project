@@ -111,15 +111,19 @@ class FakeKafka:
         self.committed = {}
         self.rewound = {}
         self.reset = False
+        self.calls = []
         self.bootstrap_servers = "test:9092"
     def ensure_connection(self): return True
     def consume_batch(self, timeout_ms=5000):
         return self._batches.pop(0) if self._batches else []
     def commit(self, offsets):
+        self.calls.append(("commit", offsets))
         self.commits += 1
         self.committed.update(offsets)
         return True
-    def rewind(self, offsets): self.rewound.update(offsets)
+    def rewind(self, offsets):
+        self.calls.append(("rewind", offsets))
+        self.rewound.update(offsets)
     def reset_connection(self): self.reset = True
 
 
@@ -191,6 +195,7 @@ def test_failed_partition_stops_at_gap_while_other_partition_commits():
         TopicPartition("seoul-weather", 1): 21,
     }
     assert c.kafka_consumer.rewound == {TopicPartition("seoul-weather", 0): 11}
+    assert [name for name, _ in c.kafka_consumer.calls] == ["commit", "rewind"]
 
 
 def test_commit_failure_discards_connection_before_next_poll():
@@ -198,6 +203,18 @@ def test_commit_failure_discards_connection_before_next_poll():
     c.kafka_consumer.commit = Mock(return_value=False)
     c.run_once()
     assert c.kafka_consumer.reset
+
+
+def test_commit_failure_with_retry_does_not_rewind_after_connection_reset():
+    c = bare([[
+        Record(encode(valid_payload()), 10),
+        Record(b"{broken", 11),
+        Record(encode(valid_payload()), 20, partition=1),
+    ]], dlq_ok=False)
+    c.kafka_consumer.commit = Mock(return_value=False)
+    c.run_once()
+    assert c.kafka_consumer.reset
+    assert c.kafka_consumer.rewound == {}
 
 
 def test_wrapper_commits_explicit_offsets():
