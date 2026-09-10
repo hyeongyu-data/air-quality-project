@@ -74,3 +74,27 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - [x] second-brain 기록 갱신
 
 추가 코드 변경은 없으며, 실제 컨테이너 재생성 검증은 Docker 환경에서 별도 운영 검증 과제로 남긴다.
+
+## 관측성 기반 최소 메트릭 확인 결과
+
+### 확인 결과
+
+기존 구현에서 Consumer 메트릭, 구조화 로그, event_id 상관관계와 관측성 문서가 이미 반영되어 있음을 확인했다. `consumer/metrics.py`, `consumer/logutil.py`, `tests/test_observability.py`, `docs/observability.md`가 해당 범위를 다룬다.
+
+### 현재 제공 기능
+
+- `weather-metrics-*` OpenSearch 문서에 처리 지연·전달 결과·결측·억제 상태를 기록한다.
+- `LOG_FORMAT=json`과 `event_id` contextvar로 구조화 로그와 상관관계를 제공한다.
+- 메트릭·로그의 민감정보 비노출 및 best-effort 색인 동작을 테스트한다.
+- `docs/observability.md`에 필드, 알람 기준, 실측 수치를 문서화한다.
+
+### 범위 외
+
+Prometheus/Grafana 배포, 외부 알림 시스템 연동, 전체 파이프라인 분산 추적은 후속 작업으로 둔다.
+
+### 처리 결과
+
+- [x] 기존 구현과 관련 테스트·문서 확인
+- [x] `docs/observability.md`와 README 연결 확인
+- [x] 중복 Issue #108 종료
+- [ ] Prometheus/Grafana 또는 외부 알람 연동은 후속 과제
