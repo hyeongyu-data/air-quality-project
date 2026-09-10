@@ -210,3 +210,19 @@ docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 ### Airflow LocalExecutor/SQLite 오류
 
 로컬 compose는 SQLite와 호환되는 `SequentialExecutor`를 사용합니다. `LocalExecutor`로 바꾸려면 Airflow 메타DB를 PostgreSQL 등으로 교체해야 합니다.
+
+### 디스크·OpenSearch 상태 점검
+
+운영 점검 또는 cron에서 아래 명령을 실행합니다. 기본 디스크 경고 기준은 80%이며
+`DISK_USAGE_THRESHOLD`로 조정할 수 있습니다. 점검 스크립트는 인증정보를 인자나
+출력으로 받지 않으며, 인증이 필요한 운영 OpenSearch는 `OPENSEARCH_HEALTH_URL`을
+인증 프록시 주소로 제공합니다.
+
+```bash
+DISK_USAGE_THRESHOLD=80 ./scripts/check_storage_health.sh
+```
+
+종료 코드가 0이 아니면 디스크 사용률이 기준 이상이거나 OpenSearch가 yellow에
+도달하지 못한 상태입니다. 먼저 `docker system df -v`와 `docker compose ps`를
+확인하고, OpenSearch red인 경우 인덱스·노드 상태를 확인한 뒤 데이터 삭제나
+볼륨 초기화는 승인 없이 수행하지 않습니다.
