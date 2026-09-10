@@ -110,11 +110,18 @@ def compare(prev: Optional[Dict], curr: Dict) -> List[str]:
     return out or ["회귀 없음"]
 
 
+def _v(x) -> str:
+    return "—" if x is None else str(x)
+
+
 def render_md(data: Dict) -> str:
     m = data["metrics"]
     meta = data["meta"]
     e2e, proc = m["e2e_latency_seconds"], m["process_duration_ms"]
     lag = data.get("kafka_lag") or {}
+    synthetic = meta["n_note"].startswith("synthetic_load")
+    # 합성 부하 버스트를 하루로 환산한 처리량은 의미가 없다.
+    tput = "— (합성 부하 — 무의미)" if synthetic else f"{_v(m['throughput_per_day'])} 건/일"
     lines = [
         f"# 성능 측정 {meta['measured_at']}",
         "",
@@ -125,11 +132,11 @@ def render_md(data: Dict) -> str:
         "| 지표 | 값 |",
         "| --- | --- |",
         f"| 표본 수 (weather-metrics 문서) | {m['n']} |",
-        f"| 처리량 | {m['throughput_per_day']} 건/일 |",
-        f"| e2e 지연 p50 / p95 / p99 (초) | {e2e['p50']} / {e2e['p95']} / {e2e['p99']} |",
-        f"| 처리 시간 p50 / p95 / p99 (ms) | {proc['p50']} / {proc['p95']} / {proc['p99']} |",
-        f"| 색인 성공률 | {m['index_success_rate']} |",
-        f"| 결측률 | {m['missing_rate']} |",
+        f"| 처리량 | {tput} |",
+        f"| e2e 지연 p50 / p95 / p99 (초) | {_v(e2e['p50'])} / {_v(e2e['p95'])} / {_v(e2e['p99'])} |",
+        f"| 처리 시간 p50 / p95 / p99 (ms) | {_v(proc['p50'])} / {_v(proc['p95'])} / {_v(proc['p99'])} |",
+        f"| 색인 성공률 | {_v(m['index_success_rate'])} |",
+        f"| 결측률 | {_v(m['missing_rate'])} |",
         f"| Kafka lag (파티션별) | {lag or '측정 불가'} |",
         "",
         "> 외부 API 응답시간은 Airflow 태스크 로그에 있다(컨테이너 stdout 아님) — "
@@ -175,12 +182,13 @@ def _kafka_lag() -> Dict[int, int]:
     admin = KafkaAdminClient(bootstrap_servers=servers)
     consumer = KafkaConsumer(bootstrap_servers=servers, group_id=None)
     try:
-        committed = admin.list_group_offsets({KAFKA_GROUP: None}).get(KAFKA_GROUP, {})
-        if not committed:
+        raw = admin.list_group_offsets({KAFKA_GROUP: None}).get(KAFKA_GROUP, {})
+        if not raw:
             return {}
-        ends = consumer.end_offsets(list(committed.keys()))
-        return {tp.partition: max(0, ends[tp] - committed[tp].offset)
-                for tp in committed if tp in ends}
+        ends = consumer.end_offsets(list(raw.keys()))
+        committed = {tp.partition: raw[tp].offset for tp in raw}
+        end_by_part = {tp.partition: ends[tp] for tp in raw if tp in ends}
+        return parse_kafka_lag(committed, end_by_part)
     finally:
         admin.close()
         consumer.close()
@@ -189,7 +197,10 @@ def _kafka_lag() -> Dict[int, int]:
 def _inject_load(n: int, wait: int) -> None:
     import time
     from kafka import KafkaProducer
-    logger.info("합성 부하 %d건 주입", n)
+    # 주의: 실제 토픽에 쓴다. 합성 메시지는 pm10 만 있어 전 지수가 결측이므로
+    # alert_watch(#121)의 조건 c(결측)를 유발하고 weather-metrics-* 를 오염시킨다.
+    # dev·격리 스택 전용.
+    logger.warning("합성 부하 %d건을 실제 토픽 %s 에 주입 (결측 알람 유발) — dev 전용", n, TOPIC)
     servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
     producer = KafkaProducer(bootstrap_servers=servers)
     ts = now_kst().replace(microsecond=0).isoformat()
@@ -200,6 +211,10 @@ def _inject_load(n: int, wait: int) -> None:
     producer.flush()
     producer.close()
     time.sleep(wait)
+
+
+def _norm_since(since: str) -> str:
+    return f"{since}d" if since and since[-1].isdigit() else since
 
 
 def _since_days(since: str) -> float:
@@ -217,8 +232,9 @@ def collect(args) -> Dict:
     if args.load:
         _inject_load(args.load, args.load_wait)
 
+    since = _norm_since(args.since)   # "7" → "7d"
     client = _os_client()
-    resp = client.search(index="weather-metrics-*", body=build_metrics_query(args.since))
+    resp = client.search(index="weather-metrics-*", body=build_metrics_query(since))
     try:
         lag = _kafka_lag()
     except Exception as exc:  # noqa: BLE001
@@ -228,12 +244,12 @@ def collect(args) -> Dict:
     return {
         "meta": {
             "measured_at": now_kst().strftime("%Y-%m-%d %H:%M KST"),
-            "since": args.since,
+            "since": since,
             "n_note": f"synthetic_load: {args.load}" if args.load else "real traffic",
             "consumer": "max_poll_records=10, poll 10s, LocalExecutor",
             "git": os.getenv("GIT_SHA", "unknown"),
         },
-        "metrics": parse_metrics(resp, _since_days(args.since)),
+        "metrics": parse_metrics(resp, _since_days(since)),
         "kafka_lag": lag,
     }
 

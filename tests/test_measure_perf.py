@@ -5,6 +5,8 @@ pytest.importorskip("opensearchpy")
 pytest.importorskip("kafka")
 
 from consumer.measure_perf import (
+    _norm_since,
+    _since_days,
     build_metrics_query,
     compare,
     parse_api_durations,
@@ -12,6 +14,34 @@ from consumer.measure_perf import (
     parse_metrics,
     render_md,
 )
+
+
+def test_norm_since_adds_day_unit():
+    assert _norm_since("7") == "7d"
+    assert _norm_since("24h") == "24h"
+    assert _norm_since("2w") == "2w"
+
+
+def test_since_days():
+    assert _since_days("7d") == 7.0
+    assert _since_days("24h") == 1.0
+    assert _since_days("1w") == 7.0
+
+
+def test_render_md_synthetic_suppresses_throughput():
+    data = {
+        "meta": {"measured_at": "x", "since": "1h", "n_note": "synthetic_load: 60",
+                 "consumer": "x", "git": "abc"},
+        "metrics": {"n": 60, "throughput_per_day": 999999.0,
+                    "e2e_latency_seconds": {"p50": None, "p95": None, "p99": None},
+                    "process_duration_ms": {"p50": 10.0, "p95": 20.0, "p99": 30.0},
+                    "index_success_rate": 1.0, "missing_rate": 1.0},
+        "kafka_lag": {}, "regression": ["첫 회차"],
+    }
+    md = render_md(data)
+    assert "999999" not in md
+    assert "합성 부하" in md
+    assert "— / — / —" in md  # None 은 대시로
 
 
 def test_build_query_has_percentile_aggs():
