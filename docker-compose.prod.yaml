@@ -38,6 +38,9 @@ secrets:
   kakao_refresh_token:
     file: ./secrets/kakao_refresh_token
   opensearch_password:
+    # #118 전까지 OpenSearch는 데모 admin 계정을 쓴다. healthcheck가 admin:admin로
+    # 고정돼 있으므로 이 파일 내용도 반드시 "admin" 이어야 한다("진짜" 비밀번호를
+    # 넣으면 healthcheck는 초록인데 consumer만 401난다).
     file: ./secrets/opensearch_password
   airflow_fernet_key:
     file: ./secrets/airflow_fernet_key
@@ -58,10 +61,14 @@ services:
     # Fernet 키: _CMD 접미사는 base compose가 AIRFLOW__CORE__FERNET_KEY: '' 를
     # 이미 설정해서 안 통한다(Airflow 2.10은 env에 키가 있으면 — 빈 문자열이어도
     # — _CMD 폴백을 건너뛴다). command 안에서 secret 파일 내용을 export 한다.
-    # secret 파일이 없으면 docker compose up이 바인드 에러로 실패 → fail-fast.
+    # 파일이 없거나(바인드 에러) 비어 있으면(test -s) 기동을 중단한다 — 빈 키로
+    # 조용히 뜨면 Connection/Variable 암호화가 사실상 꺼진다.
     command: >
       bash -c "
+      set -e &&
       rm -f /opt/airflow/airflow-webserver*.pid &&
+      test -s /run/secrets/airflow_fernet_key &&
+      test -s /run/secrets/airflow_admin_password &&
       export AIRFLOW__CORE__FERNET_KEY=\"$$(cat /run/secrets/airflow_fernet_key)\" &&
       ADMIN_PW=\"$$(cat /run/secrets/airflow_admin_password)\" &&
       airflow db migrate &&

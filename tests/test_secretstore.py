@@ -31,6 +31,29 @@ def test_default_when_nothing_set(monkeypatch):
     assert read_secret("NOPE", "fallback") == "fallback"
 
 
+def test_empty_file_returns_empty_string(tmp_path, monkeypatch):
+    f = tmp_path / "smtp_password"
+    f.write_text("", encoding="utf-8")
+    monkeypatch.setenv("SMTP_PASSWORD", "from-env")
+    monkeypatch.setenv("SMTP_PASSWORD_FILE", str(f))
+    # 빈 파일은 "" — 호출부에서 falsy라 미설정과 같게 다뤄진다(env로 안 떨어진다)
+    assert read_secret("SMTP_PASSWORD") == ""
+
+
+def test_whitespace_only_file_is_stripped_to_empty(tmp_path, monkeypatch):
+    f = tmp_path / "tok"
+    f.write_text("   \n\t ", encoding="utf-8")
+    monkeypatch.setenv("KAKAO_REFRESH_TOKEN_FILE", str(f))
+    assert read_secret("KAKAO_REFRESH_TOKEN") == ""
+
+
+def test_empty_file_env_var_falls_back_to_env(monkeypatch):
+    # FOO_FILE="" 는 미설정과 같게 — env 폴백
+    monkeypatch.setenv("SLACK_WEBHOOK_URL_FILE", "")
+    monkeypatch.setenv("SLACK_WEBHOOK_URL", "https://example.test/hook")
+    assert read_secret("SLACK_WEBHOOK_URL") == "https://example.test/hook"
+
+
 def test_missing_file_path_raises(monkeypatch, tmp_path):
     monkeypatch.setenv("KAKAO_CLIENT_SECRET_FILE", str(tmp_path / "absent"))
     with pytest.raises(RuntimeError, match="KAKAO_CLIENT_SECRET_FILE"):

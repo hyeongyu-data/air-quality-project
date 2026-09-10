@@ -16,6 +16,11 @@
 | `kakao_rest_api_key` | 카카오 REST API 키 |
 | `kakao_client_secret` | 카카오 client secret |
 | `kakao_refresh_token` | 카카오 refresh token (없으면 빈 파일 — 상태 파일이 우선) |
+
+> 운영 프로필의 consumer는 6개 채널 시크릿을 **모두** 마운트한다. Slack·이메일을
+> 안 쓰더라도 해당 파일이 없으면 `docker compose up`이 실패하므로, 안 쓰는 채널은
+> **빈 파일**로 만들어 둔다(`: > secrets/slack_webhook_url`). 로더가 빈 값을
+> 미설정과 같게 다룬다.
 | `opensearch_password` | Consumer가 접속할 OpenSearch 비밀번호 (데모 구성이면 `admin`) |
 | `airflow_fernet_key` | Airflow Fernet 키 |
 | `airflow_admin_password` | Airflow 관리자 비밀번호 |

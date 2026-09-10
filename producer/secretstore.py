@@ -12,7 +12,12 @@ import os
 
 
 def read_secret(name: str, default: str | None = None) -> str | None:
-    """`{name}_FILE` 이 가리키는 파일, 없으면 `{name}` env, 없으면 default."""
+    """`{name}_FILE` 이 가리키는 파일, 없으면 `{name}` env, 없으면 default.
+
+    `{name}_FILE` 이 설정됐는데 그 경로를 못 읽으면 `os.getenv` 와 달리 `None` 이
+    아니라 `RuntimeError` 를 낸다 — 시크릿이 있어야 할 배포에서 조용히 빈 값으로
+    뜨는 것보다 기동 실패가 낫다(의도된 fail-fast). 빈 파일은 `""` 를 돌려준다.
+    """
     path = os.environ.get(f"{name}_FILE")
     if path:
         try:
