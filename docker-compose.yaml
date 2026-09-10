@@ -9,12 +9,49 @@ volumes:
     driver: local
   airflow_home:
     driver: local
+  airflow_pg_data:
+    driver: local
   opensearch_data:
     driver: local
   consumer_state:
     driver: local
 
 services:
+  # ============================================================================
+  # PostgreSQL: Airflow 메타DB (#119 — SQLite/SequentialExecutor 한계 해소)
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: pj-postgres
+    environment:
+      POSTGRES_USER: airflow
+      # dev 로컬 학습용. 운영 프로필은 secret 파일로 교체(!reset).
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+      TZ: 'Asia/Seoul'
+    volumes:
+      - airflow_pg_data:/var/lib/postgresql/data
+    # 포트 미노출 — compose 내부 전용
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - weather-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   # ============================================================================
   # Kafka: 메시지 브로커
   # ============================================================================
@@ -110,15 +147,24 @@ services:
       TZ: 'Asia/Seoul'
       PYTHONUNBUFFERED: '1'
       PYTHONIOENCODING: 'utf-8'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
-      # Executor & 로딩
-      AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+      # 관리자 계정은 아래 command가 만든다(db migrate 이후). 엔트리포인트의
+      # _AIRFLOW_WWW_USER_CREATE는 fresh postgres에서 migrate 전에 돌아
+      # "You need to initialize the database" 에러만 남겨 제거했다 (#119).
+      # Executor (#119)
+      # LocalExecutor: 워커 컨테이너 없이 스케줄러가 태스크를 별도 프로세스로
+      # 실행한다. 현재 DAG는 선형(validate>>fetch>>publish>>notify)이라 한 run
+      # 안의 병렬성 이득은 없고, 실질 이득은 "스케줄러가 태스크 실행에 안 막힘
+      # + SQLite lock 소멸"이다. Celery는 별도 이슈.
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      
-      # 데이터베이스
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
+      # SequentialExecutor에선 무시되던 설정. DAG가 팬아웃되면 의미가 생긴다.
+      AIRFLOW__CORE__PARALLELISM: '8'
+      AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '4'
+      AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: '1'
+
+      # 데이터베이스 — PostgreSQL (#119). SQLite는 standalone의 웹서버·스케줄러·
+      # 트리거러가 한 파일을 공유해 `database is locked` 위험이 상존했다.
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       
       # 보안 (개발용, 프로덕션에서는 보안 강화 필요)
       AIRFLOW__CORE__FERNET_KEY: ''
@@ -146,9 +192,8 @@ services:
       - ./producer:/opt/airflow/producer
       # Consumer 스크립트
       - ./consumer:/opt/airflow/consumer
-      # 영속 데이터
-      # 홈 전체를 볼륨에 올린다. 메타DB(airflow.db)가 홈 바로 아래라
-      # logs만 마운트하면 컨테이너 재생성 시 DAG on/off·실행 이력이 전멸한다.
+      # 영속 데이터. 메타DB는 이제 PostgreSQL(#119)이고, 이 볼륨은 로그·생성된
+      # airflow.cfg·webserver_config.py·standalone_admin_password.txt 를 보존한다.
       # /opt/airflow는 이미지에 airflow:root 소유로 존재해서, 빈 명명 볼륨을
       # 붙이면 Docker가 내용과 소유권을 복사한다(root 소유 생성 함정 회피 —
       # 이미지에 없는 경로였다면 root 0755로 생성돼 uid 50000이 못 쓴다).
@@ -170,7 +215,9 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    
+      postgres:
+        condition: service_healthy
+
     # 헬스체크
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]

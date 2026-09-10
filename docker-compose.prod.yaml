@@ -31,7 +31,8 @@
 #   - Kafka UI 비밀번호는 .env.prod 환경변수다(Spring Boot _FILE 미지원). 호스트
 #     미노출이라 위험도 낮음.
 #   - Airflow가 읽는 앱 시크릿(공공 API 키·Slack)은 아직 .env 바인드 마운트다.
-#     docker inspect에는 안 뜨지만, secret 매니저 이관은 #119/#120에서.
+#     docker inspect에는 안 뜨지만, secret 매니저 이관은 #120에서.
+#   - Airflow 메타DB는 PostgreSQL(#119). 비밀번호·DSN은 Docker secrets.
 #   - 검증 절차·롤백 기준은 SECURITY.md의 "운영 프로필" 절 참고.
 
 secrets:
@@ -54,11 +55,26 @@ secrets:
     file: ./secrets/airflow_fernet_key
   airflow_admin_password:
     file: ./secrets/airflow_admin_password
+  postgres_password:
+    file: ./secrets/postgres_password
+  airflow_db_conn:
+    # 전체 SQLAlchemy DSN. postgres_password 와 같은 비밀번호를 담아야 한다
+    # (secrets/README.md 의 스니펫으로 한 값에서 둘 다 생성). _CMD 는 shlex.split
+    # 되므로 명령 치환 불가 — 파일에 URL 전체를 그대로 둔다.
+    file: ./secrets/airflow_db_conn
 
 services:
   kafka:
     ports: !override
       - "127.0.0.1:9092:9092"
+
+  postgres:
+    secrets:
+      - postgres_password
+    environment:
+      # base 의 평문 POSTGRES_PASSWORD 를 제거 — 이미지가 평문과 _FILE 동시 설정을 거부한다
+      POSTGRES_PASSWORD: !reset null
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
 
   airflow:
     ports: !override
@@ -66,11 +82,16 @@ services:
     secrets:
       - airflow_fernet_key
       - airflow_admin_password
-    # Fernet 키: _CMD 접미사는 base compose가 AIRFLOW__CORE__FERNET_KEY: '' 를
-    # 이미 설정해서 안 통한다(Airflow 2.10은 env에 키가 있으면 — 빈 문자열이어도
-    # — _CMD 폴백을 건너뛴다). command 안에서 secret 파일 내용을 export 한다.
-    # 파일이 없거나(바인드 에러) 비어 있으면(test -s) 기동을 중단한다 — 빈 키로
-    # 조용히 뜨면 Connection/Variable 암호화가 사실상 꺼진다.
+      - airflow_db_conn
+    environment:
+      # DB conn 은 이미지 엔트리포인트가 컨테이너 command 보다 먼저(airflow db check,
+      # create_www_user) 필요로 한다 → command 안 export 로는 늦다. base env 를
+      # !reset 하고 _CMD 로 읽는다(_CMD 는 shell 평가가 아니므로 bare `cat` 이어야 함).
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: !reset null
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN_CMD: "cat /run/secrets/airflow_db_conn"
+    # Fernet 키: base 의 AIRFLOW__CORE__FERNET_KEY: '' 가 _CMD 폴백을 막으므로
+    # (엔트리포인트는 fernet 을 검증하지 않아 여기서 export 로 충분하다) command 안
+    # export. 파일이 없거나(바인드 에러) 비어 있으면(test -s) 기동을 중단한다.
     command: >
       bash -c "
       set -e &&

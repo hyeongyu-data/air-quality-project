@@ -74,7 +74,8 @@ flowchart LR
 
 | 구성 | 버전/이미지 | 역할 |
 | --- | --- | --- |
-| Airflow | `apache/airflow:2.10.0` | 6시간 주기 스케줄링, 수집, 계약 검증, Kafka 발행 |
+| Airflow | `apache/airflow:2.10.0` | 6시간 주기 스케줄링, 수집, 계약 검증, Kafka 발행. `LocalExecutor` |
+| PostgreSQL | `postgres:16-alpine` | Airflow 메타DB (전용 볼륨, 백업 스크립트) — [ADR-0007](docs/adr/0007-airflow-postgres-localexecutor.md) |
 | Kafka | `apache/kafka:3.7.0` | 버퍼·백로그 재생 (영속 볼륨, 보존 72h) |
 | Consumer | Python Docker image | 규칙 판정, 멀티채널 발송, 메트릭 |
 | OpenSearch | `opensearchproject/opensearch:2.8.0` | 판정 이력·쿨다운 상태·처리 메트릭 |

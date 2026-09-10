@@ -201,15 +201,41 @@ docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh \
 가능성을 검토해야 합니다. DLQ 발행 실패·커밋 실패·브로커 재시작 복구는
 실제 Kafka 통합 테스트가 필요합니다.
 
-### Airflow 메타DB
+### Airflow 메타DB (PostgreSQL, #119)
 
-메타DB(SQLite)는 홈 볼륨 `airflow_home`에 있어 컨테이너를 재생성해도 DAG on/off 상태와 실행 이력이 유지됩니다. 초기화하려면 `docker compose down -v`로 볼륨까지 지웁니다.
+메타DB는 `postgres:16-alpine` 서비스의 전용 볼륨 `airflow_pg_data`에 있습니다.
+컨테이너(airflow·postgres)를 재생성해도 DAG on/off 상태와 실행 이력이 유지되며,
+executor는 `LocalExecutor`(태스크를 별도 프로세스로 병렬 실행)입니다. 전체
+초기화는 `docker compose down -v`. 설계 근거는 [ADR-0007](adr/0007-airflow-postgres-localexecutor.md).
 
-이 규모(하루 4회, 선형 4태스크)에서는 SQLite + SequentialExecutor로 충분합니다. DAG 수가 늘거나 병렬 실행이 필요해지면 PostgreSQL + LocalExecutor로 전환합니다 — compose에 postgres 서비스를 추가하고 `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN`을 교체하면 됩니다.
+`airflow_home` 볼륨은 로그·생성된 `airflow.cfg`·`webserver_config.py`·
+`standalone_admin_password.txt`를 보존합니다(메타DB 아님).
 
-### Airflow LocalExecutor/SQLite 오류
+**SQLite → Postgres 전환 시**: 기존 `airflow_home`의 `airflow.db`는 버려집니다
+(Postgres에 새 메타DB). DAG는 자동 재등록되지만 실행 이력은 유실됩니다. 전환 전
+`airflow_home/airflow.db`를 복사해 두세요.
 
-로컬 compose는 SQLite와 호환되는 `SequentialExecutor`를 사용합니다. `LocalExecutor`로 바꾸려면 Airflow 메타DB를 PostgreSQL 등으로 교체해야 합니다.
+### 메타DB 백업·복구
+
+```bash
+# 백업 (cron 권장, 예: 매일 1회)
+scripts/airflow_db_backup.sh                        # airflow-db-YYYYMMDD-HHMMSS.sql.gz
+
+# 복구 — airflow를 먼저 멈춘다 (--clean이 살아 있는 테이블을 DROP)
+docker compose stop airflow
+gunzip -c airflow-db-XXXX.sql.gz | docker compose exec -T postgres psql -U airflow -d airflow
+docker compose start airflow
+```
+
+복구 리허설(검증됨): 백업 → `stop airflow` → `airflow_pg_data` 볼륨 삭제 →
+`up postgres` → 복구 → `dag_run` 행 수·DAG on/off 확인 → `start airflow`.
+
+### Airflow가 postgres에 못 붙을 때
+
+`depends_on: postgres condition: service_healthy`로 순서를 보장합니다. 그래도
+`FATAL: password authentication failed`가 나면: 운영 프로필은 `secrets/postgres_password`와
+`secrets/airflow_db_conn`이 **같은 비밀번호**여야 합니다(secrets/README.md 스니펫).
+기존 `airflow_pg_data` 볼륨이 다른 비밀번호로 초기화돼 있으면 `down -v` 후 재생성.
 
 ### 디스크·OpenSearch 상태 점검
 

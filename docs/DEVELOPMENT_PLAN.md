@@ -192,3 +192,35 @@ Airflow PostgreSQL·LocalExecutor → `#120` 런타임 pip 제거 → `#121` 알
   유효 메시지 1건이 `weather-alert-2026.09`·`weather-metrics-*`에 색인, 그룹 lag 0.
 - 범위 외: 자체 서명 CA(재검토: 9200 외부 노출), Kafka SASL(재검토: 브로커 외부
   노출), Airflow 앱 시크릿 매니저(#119/#120), 클라우드 관리형.
+- PR #124, squash 머지 `8566ec8`. 리뷰(REQUEST CHANGES) 반영: 안 쓰는 데모 계정
+  5개 제거, `weather_manager`에서 `cluster_composite_ops`·aliases 제거, healthcheck를
+  `weather_writer`로, OSD-prod 비호환 명시, CA 만료·볼륨 blast radius 문서화.
+
+### #119 Airflow 메타DB PostgreSQL·LocalExecutor 전환
+
+- Issue: `#119` / 브랜치: `feat/119-airflow-postgres`
+- 구현:
+  - `postgres:16-alpine` 서비스 + 전용 볼륨 `airflow_pg_data` + `pg_isready`
+    healthcheck. 이미지에 `psycopg2 2.9.9` 포함 — 의존성 추가 없음.
+  - airflow: `SequentialExecutor`→`LocalExecutor`, `SQL_ALCHEMY_CONN`을 postgres로,
+    `PARALLELISM=8`·`MAX_ACTIVE_TASKS_PER_DAG=4`·`MAX_ACTIVE_RUNS_PER_DAG=1`,
+    `depends_on: postgres healthy`. `airflow standalone` 유지(LocalExecutor는
+    별도 워커 없음). dev·prod 모두 postgres(이중 백엔드 안 함).
+  - prod 오버레이: 이미지 엔트리포인트가 `command:`보다 먼저 DB에 붙으므로
+    `command:` export 불가 → `AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: !reset null` +
+    `..._CMD: "cat /run/secrets/airflow_db_conn"`(전체 DSN, `_CMD`는 shlex.split
+    되므로 명령치환 불가). postgres `POSTGRES_PASSWORD: !reset null` +
+    `POSTGRES_PASSWORD_FILE`(평문+`_FILE` 동시 설정 거부). `postgres_password`와
+    `airflow_db_conn`은 같은 비밀번호.
+  - `scripts/airflow_db_backup.sh`(`pg_dump --clean --no-owner`), CI 오버레이 스텝에
+    새 더미 시크릿 2개 추가, `tests/test_compose_airflow_db.py`(텍스트 가드).
+  - ADR-0007, RUNBOOK(백업·복구 절차·마이그레이션 주의), README 아키텍처 표.
+- 검증: pytest 220개, ruff `E9,F`, compileall, base·오버레이 `config -q`,
+  `git diff --check`. 격리 Compose:
+  - dev: postgres·airflow healthy, executor=LocalExecutor, conn=postgres,
+    `database is locked` 0건, DAG 2회 run `success`, airflow 컨테이너 재생성 후
+    실행 이력·on/off 보존(pg 볼륨), 백업→볼륨 삭제→복구 리허설(dag_run 2행 복원).
+  - prod 오버레이: postgres·airflow healthy, conn이 secret `_CMD`에서 옴,
+    `docker inspect`에 평문 DSN·비밀번호 부재(경로만), auth 실패 0건.
+- 범위 외: CeleryExecutor/KubernetesExecutor, webserver/scheduler 컨테이너 분리,
+  MWAA, SQLite→Postgres 데이터 마이그레이션(실행 이력 유실 감수).
