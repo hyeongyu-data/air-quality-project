@@ -98,3 +98,21 @@ Prometheus/Grafana 배포, 외부 알림 시스템 연동, 전체 파이프라�
 - [x] `docs/observability.md`와 README 연결 확인
 - [x] 중복 Issue #108 종료
 - [ ] Prometheus/Grafana 또는 외부 알람 연동은 후속 과제
+
+## 남은 작업 기준 목록
+
+완료된 P0 작업과 기존 구현 확인 항목을 제외한 후속 작업은 아래 순서로 진행한다.
+
+1. 공공 API 응답 픽스처 기반 파싱 테스트를 CI에 추가한다.
+2. 디스크 사용량·OpenSearch 상태 알람 기준과 실행 방법을 추가한다.
+3. API 장애·채널 인증 만료·OpenSearch red·Kafka 백로그 대응 런북을 보강한다.
+4. 처리량 상한과 p50/p95 지연을 측정하고 문서화한다.
+5. Airflow SQLite/SequentialExecutor를 PostgreSQL/LocalExecutor로 전환할 계획을 수립한다.
+6. 런타임 패키지 설치를 제거하고 이미지·의존성 버전을 고정한다.
+7. Secret Manager, TLS, 관리 포트 제한, non-root 컨테이너를 적용한다.
+
+각 항목은 독립 Issue와 이슈 번호 브랜치로 진행하며, 코드·Markdown 수정과 검증 후 PR로 병합한다.
+
+### 1번 항목 확인 결과: 공공 API 픽스처 테스트
+
+`tests/fixtures/`와 `tests/test_api_contract.py`에 KMA·AirKorea JSON/XML 픽스처, 성공 응답·실패 응답·필수 필드 검증이 이미 구현되어 있다. 중복 Issue #110은 종료하며 추가 코드는 작성하지 않는다.

@@ -188,7 +188,7 @@ Airflow 계정이 커맨드에 하드코딩돼 재시작마다 `airflow/airflow`
 **상태 영속성**
 - [x] Kafka 로그·OpenSearch 데이터·Airflow 메타DB가 각각 명명 볼륨에 있다 (#69 #70 #78 — 전부 재생성 실측 검증)
 - [x] 인덱스 보존 정책(ISM 90일)이 설정돼 있다 (로그 보존 정책은 #47)
-- [ ] 디스크 사용률 알람이 있다
+- [x] 디스크 사용률·OpenSearch 상태 점검 스크립트가 있다 (`scripts/check_storage_health.sh`)
 
 **오케스트레이션**
 - [ ] 메타DB가 PostgreSQL이고 executor가 SequentialExecutor가 아니다
