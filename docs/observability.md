@@ -171,10 +171,22 @@ curl -s "localhost:9200/weather-metrics-*/_search" -H 'Content-Type: application
 }'
 ```
 
-### p50/p95 재측정
+### 정기 측정 (#122)
 
-최근 24시간 메트릭에서 처리 소요와 end-to-end 지연의 p50·p95를 조회합니다.
-운영 보고서에는 조회 기간과 Consumer 설정을 함께 기록합니다.
+`consumer/measure_perf.py` 가 처리량·e2e·처리 시간 p50/p95/p99·색인 성공률·
+결측률·Kafka lag·외부 API 응답시간을 한 번에 수집해 `docs/perf/<날짜>.{json,md}`
+리포트로 남긴다. `--compare` 는 직전 회차 대비 회귀(p95 +50%, 색인률 <0.98,
+lag >10)를 표시한다 — 측정 exit code 는 항상 0, 회귀 알람과 분리.
+
+```bash
+# 운영 (주 1회 권장, prod 오버레이 필수)
+COMPOSE_FILE=docker-compose.yaml:docker-compose.prod.yaml \
+  docker compose run --rm --no-deps -T consumer \
+  python consumer/measure_perf.py --since 7d --out /app/state/perf --compare
+```
+
+주기·회수·읽는 법은 [docs/perf/README.md](perf/README.md). 아래 수동 쿼리는
+스크립트가 대체하지만 즉석 확인용으로 남겨둔다.
 
 ```bash
 curl -s "localhost:9200/weather-metrics-*/_search" \
@@ -183,5 +195,4 @@ curl -s "localhost:9200/weather-metrics-*/_search" \
 ```
 
 기본 구성의 이론상 처리량 상한은 `max_poll_records=10`과 10초 폴링 간격으로
-초당 약 1건입니다. 실제 용량 계획과 장애 기준은 위 쿼리의 p95를 기준으로
-갱신합니다.
+초당 약 1건입니다. 실트래픽 퍼센타일은 표본 수가 작으면 방향성 참고용입니다.

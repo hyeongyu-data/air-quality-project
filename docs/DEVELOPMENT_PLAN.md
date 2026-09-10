@@ -285,3 +285,45 @@ Airflow PostgreSQL·LocalExecutor → `#120` 런타임 pip 제거 → `#121` 알
   - `check_storage_health.sh` 강제 실패 → f·g 리포트, RC=1.
 - 범위 외: Prometheus/Alertmanager 풀스택, PagerDuty 실연동·온콜, Slack 외 채널,
   상시 워처 컨테이너, "N회 후 에스컬레이션".
+- PR #127, squash 머지 `cbb5b82`. 리뷰(APPROVE WITH NITS) 반영: prod cron 이
+  오버레이를 함께 걸어야 함(`COMPOSE_FILE`), kafka-python 로그 억제,
+  `check_storage_health.sh` Slack 페이로드 `%b`→`%s`.
+
+### #122 성능 수치 정기 측정 스크립트와 기록
+
+- Issue: `#122` / 브랜치: `feat/122-perf-measurement`
+- 구현:
+  - `consumer/measure_perf.py` — Consumer 이미지 포함, `alert_watch._os_client`
+    (#121) 재사용. **컨테이너 안에서 도므로 opensearchpy·kafka-python 만** 쓴다
+    (docker·git 없음 — 초기 subprocess 설계는 `FileNotFoundError` 로 실패, 재설계).
+    처리량·e2e/처리시간 p50-p95-p99·색인 성공률·결측률·Kafka lag 수집.
+    `docs/perf/<타임스탬프>.{json,md}` — `.json` 이 `--compare` 소스, `.md` 는 렌더.
+    `--load N` = kafka-python `KafkaProducer` 로 유효 메시지 주입 후 측정.
+  - `_nodes/stats` 색인 지연 지표는 **드롭** — `weather_writer`(최소 권한 #118)가
+    `cluster:monitor/nodes/stats` 없어 403. `process_duration_ms` 가 색인 시간 포함.
+  - 외부 API 응답시간은 Airflow 태스크 로그(`/opt/airflow/logs` 파일, stdout 아님)
+    라 컨테이너 안에서 못 읽음 → 리포트에 수동 `exec grep` 안내. `parse_api_durations`
+    함수는 남겨 수동 로그를 넘길 때 씀.
+  - 회귀 기준: p95 +50%(`PERF_REGRESS_P95_PCT`)·색인률 <0.98·lag >10. 측정 exit
+    code 항상 0(#121 알람과 분리).
+  - `docs/perf/README.md`(형식·주기·읽는 법·회귀 기준), `docs/perf/<날짜>.{json,md}`
+    첫 베이스라인(격리 prod 오버레이 `--load 60`). `observability.md`·RUNBOOK
+    정기 측정 절차(주 1회, 자동 커밋 안 함).
+  - `tests/test_measure_perf.py`(파서·비교·렌더 11개).
+- 검증: pytest 245개, ruff `E9,F`, compileall, base·오버레이 `config -q`,
+  `git diff --check`. 격리 Compose(prod 오버레이, `aq122`):
+  - `--load 60` → 리포트 생성(`/app/state/perf/*.{json,md}`), 5개 지표 채워짐,
+    Kafka lag 실측.
+  - 2회차 `--compare` → 백로그 드레인 중이라 `e2e p95 +56%`·`lag 90>10` 회귀 감지
+    (감지 로직 동작 확인). 드레인 후 `lag 0`.
+  - `docs/perf/` 로 리포트 회수(`docker compose cp`).
+- 범위 외: Grafana 상시 대시보드, 자동 회귀 알림, 프로파일링·최적화.
+
+## 캠페인 완료
+
+`#117`~`#122` 6개 이슈(시크릿 이관 → 서비스 인증·non-root → Airflow PostgreSQL →
+런타임 pip 제거 → 알람 자동 발송 → 성능 정기 측정) 전부 계획→[Agent 검증]→
+구현·docker검증→PR→[Agent 리뷰]→반영→squash 머지 사이클로 처리. 로컬 Docker
+포트폴리오 범위에서 "실제 회사 운영 수준" 방향으로 한 단계 올림. 남은 defer 항목
+(자체 서명 CA·Kafka SASL·Prometheus 스택·PagerDuty)은 각 SECURITY.md/observability.md에
+설계와 재검토 조건으로 기록.
