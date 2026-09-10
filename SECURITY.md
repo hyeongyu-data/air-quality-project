@@ -34,10 +34,40 @@
 | 카카오 REST 키 / client secret | 카카오 개발자 콘솔 | `secrets/kakao_*` 교체 |
 | 카카오 refresh token | `scripts/kakao_get_refresh_token.py` (재발급 + 발급 즉시 검증, #95). 회전값은 상태 파일에 자동 저장 | 자동 |
 | Airflow 관리자 비밀번호 | 임의 문자열 재생성 | `secrets/airflow_admin_password` 교체 후 airflow 재기동(`reset-password` 자동 실행) |
-| Airflow Fernet 키 | **주의**: 기존 Connection/Variable이 옛 키로 암호화돼 있어 단순 교체하면 복호화 불가 | export → 키 교체 → import 절차 필요. Airflow DB 전환(#119)과 함께 정식 절차 수립 |
+| Airflow Fernet 키 | 아래 "Fernet 키 생성·회전" 절차 | `secrets/airflow_fernet_key` 교체 후 airflow 재기동 |
 
 카카오 refresh token 만료 임박은 Consumer가 경고 로그를 남깁니다(#50).
 자동 알림 배선은 #121에서 다룹니다.
+
+### Fernet 키 생성·회전
+
+**생성** (최초 1회):
+
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())" \
+  | tr -d '\n' > secrets/airflow_fernet_key
+chmod 600 secrets/airflow_fernet_key
+```
+
+운영 오버레이는 이 파일이 **비어 있거나 없으면 기동을 중단**합니다
+(`docker-compose.prod.yaml`의 `test -s`).
+
+**회전**: 기존 Connection/Variable이 옛 키로 암호화돼 있어 단순 교체하면 복호화가
+깨집니다. Airflow는 `AIRFLOW__CORE__FERNET_KEY`에 `새키,옛키` 쉼표 목록을 받아
+옛 키로 복호화·새 키로 재암호화합니다.
+
+```bash
+OLD=$(cat secrets/airflow_fernet_key)
+NEW=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+printf '%s,%s' "$NEW" "$OLD" > secrets/airflow_fernet_key      # 새키,옛키
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d airflow
+docker compose exec airflow airflow rotate-fernet-key           # 저장된 값 재암호화
+printf '%s' "$NEW" > secrets/airflow_fernet_key                 # 옛키 제거
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d airflow
+```
+
+현재는 Connection/Variable을 쓰지 않으므로 실무상 재생성(옛 키 무시)으로 충분합니다.
+DB를 PostgreSQL로 옮긴 뒤(#119)에는 회전 전 `airflow_home`/DB 백업을 먼저 합니다.
 
 ## 비밀정보 유출 시 대응
 
@@ -95,18 +125,52 @@
 ```bash
 cp .env.prod.example .env.prod          # 비밀 아닌 설정
 # ./secrets/ 파일 생성 — secrets/README.md 참고
+#   secrets/opensearch_password 는 weather_writer 비밀번호 (기본 "weatherwriter",
+#   교체 시 scripts/opensearch_hash.sh 로 해시 재생성 → config/opensearch-security/internal_users.yml)
 docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
 ```
 
 | 항목 | 기본(dev) | 운영 프로필 |
 | --- | --- | --- |
-| 관리 포트(9092·8080·9200·8081) | 모든 인터페이스 | **127.0.0.1 전용** |
+| REST/관리 포트(9092·8080·9200) | 모든 인터페이스 | **127.0.0.1 전용** |
+| 관측 UI(Kafka UI·OSD) | 호스트 노출 | **호스트 미노출** — `docker compose exec` 또는 임시 `run --service-ports` / SSH 터널 |
+| 불필요 포트(9093 controller·9600 perf) | 호스트 매핑됨 | **매핑 제거** |
 | 시크릿 주입 | `.env` 평문(`env_file` → 컨테이너 env) | **Docker secrets** — `./secrets/*` → `/run/secrets/*`, `*_FILE`로 읽음. consumer `env_file`은 `.env.prod`(비밀 아님)로 교체 |
-| Airflow 계정/Fernet 키 | `airflow/airflow`, 빈 키 | **secret 파일 필수 — 없으면 기동 실패** |
-| OpenSearch | 보안 플러그인 off, http | **TLS + 인증** (무인증 401) |
+| Airflow 계정/Fernet 키 | `airflow/airflow`, 빈 키 | **secret 파일 필수 — 비었거나 없으면 기동 중단(`test -s`)** |
+| OpenSearch 접근 | 보안 플러그인 off, http | **TLS + 핀된 CA 체인 검증** (무인증 401), healthcheck도 `weather_writer` |
+| OpenSearch 계정 | (없음) | 안 쓰는 데모 계정 5개 제거. Consumer는 **`weather_writer` 최소 권한** — `weather-*` 데이터·템플릿·ISM만. `admin`은 break-glass(데모 해시 유지 — 회전은 `securityadmin.sh` 필요, 자체 CA 도입과 함께) |
 | Kafka UI | 무인증, 동적 설정 허용 | **로그인 강제**, 동적 설정 차단 |
+| Consumer 컨테이너 | root | **non-root (uid 10001)** |
+| OpenSearch Dashboards | http, 보안 off | **prod 오버레이와 비호환** — `--profile ops` 는 dev 전용 |
 
-필요 파일: `./secrets/{slack_webhook_url,smtp_password,kakao_rest_api_key,kakao_client_secret,kakao_refresh_token,opensearch_password,airflow_fernet_key,airflow_admin_password}` · `.env.prod` · compose 보간용 `.env`의 `KAFKA_UI_PASSWORD`
+필요 파일: `./secrets/{slack_webhook_url,smtp_password,kakao_rest_api_key,kakao_client_secret,kakao_refresh_token,opensearch_password,airflow_fernet_key,airflow_admin_password}` · `.env.prod` · `./config/opensearch-security/`(커밋됨) · compose 보간용 `.env`의 `KAFKA_UI_PASSWORD`
+
+### 컨테이너 실행 사용자
+
+| 서비스 | 사용자 | 비고 |
+| --- | --- | --- |
+| consumer | `app` (uid 10001) | `Dockerfile`에서 지정 (#118) |
+| kafka | `appuser` (uid 1000) | 이미지 기본 |
+| opensearch | `opensearch` (uid 1000) | 이미지 기본 |
+| airflow | uid 50000 | 이미지 기본 |
+| opensearch-dashboards | uid 1000 | 이미지 기본 |
+| kafka-ui | root | provectus 이미지 기본. 호스트 포트 미노출로 완화 |
+
+### 기존 볼륨 주의
+
+`weather_writer` 계정과 non-root는 **새 볼륨**에서만 자동 반영된다. `<프로젝트>`는
+compose 프로젝트명(기본은 디렉터리명 `air-quality-project`, `-p` 로 지정 가능).
+
+- `<프로젝트>_opensearch_data` 볼륨이 이미 있으면 `.opendistro_security` 인덱스가
+  남아 있어 마운트된 `config/opensearch-security/*.yml`이 무시된다 →
+  `docker compose ... down -v` 후 재기동, 또는 컨테이너 안에서
+  `plugins/opensearch-security/tools/securityadmin.sh -cd config/opensearch-security
+  -icl -nhnv -cacert config/root-ca.pem -cert config/kirk.pem -key config/kirk-key.pem`.
+- `<프로젝트>_consumer_state` 볼륨이 root 소유로 만들어져 있으면 non-root Consumer가
+  `/app/state` 에 못 쓴다. 그러면 **쿨다운 상태가 fail-open** 으로 떨어져 같은
+  경보가 여러 채널로 중복 발송되고, **카카오 토큰 회전 저장이 조용히 실패**한다.
+  → `down -v`, 또는
+  `docker run --rm -v <프로젝트>_consumer_state:/s alpine chown -R 10001:10001 /s`.
 
 ### 검증 절차
 
@@ -115,13 +179,24 @@ docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
 docker inspect pj-consumer -f '{{range .Config.Env}}{{println .}}{{end}}' | grep -iE '_FILE='   # 경로만
 docker exec pj-consumer sh -c "cat /proc/1/environ | tr \"\\0\" \"\\n\"" | grep -Ei 'password|token|webhook' || echo "값 노출 없음(OK)"
 
-curl -sk https://localhost:9200/                  # 401 이어야 함
-curl -sk -u admin:$(cat secrets/opensearch_password) https://localhost:9200/   # 200
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/api/clusters  # 302 (로그인 리다이렉트)
-docker port pj-opensearch 9200                    # 127.0.0.1:9200
+# non-root
+docker exec pj-consumer id                        # uid=10001(app)
+docker exec pj-consumer sh -c 'touch /app/state/probe && echo state-writable'
+
+# OpenSearch 인증·최소 권한 (weather_writer 비밀번호로)
+PW=$(cat secrets/opensearch_password)
+curl -sk https://localhost:9200/                                              # 401
+curl -sk -o /dev/null -w '%{http_code}\n' -u weather_writer:$PW https://localhost:9200/_cluster/health   # 200
+curl -sk -o /dev/null -w '%{http_code}\n' -u weather_writer:$PW -XPUT https://localhost:9200/_cluster/settings -H 'Content-Type: application/json' -d '{"persistent":{}}'  # 403
+curl -sk -o /dev/null -w '%{http_code}\n' -u weather_writer:$PW https://localhost:9200/.opendistro_security/_search   # 403
+
+# 관측 UI 포트 미노출
+docker compose -f docker-compose.yaml -f docker-compose.prod.yaml port kafka-ui 8080   # 출력 없음
 ```
 
-Consumer가 TLS+인증으로 저장까지 하는지는 메시지 1건을 발행해 `weather-alert-*` 색인을 확인합니다.
+Consumer가 `weather_writer`로 TLS+체인 검증 하에 저장까지 하는지는 유효 메시지
+1건(`schema_version:1`)을 발행해 `weather-alert-*`·`weather-metrics-*` 색인과
+컨슈머 그룹 lag 0을 확인합니다.
 
 > CI는 base compose만 `config -q`로 검증합니다. 오버레이의 top-level `secrets:`는
 > `.github/workflows/ci.yml`의 별도 스텝(더미 `secrets/` + `.env.prod` fixture)에서
@@ -131,10 +206,32 @@ Consumer가 TLS+인증으로 저장까지 하는지는 메시지 1건을 발행�
 
 오버레이 없이 재기동하면 기본 구성으로 돌아갑니다. 단, OpenSearch 보안 플러그인을 켰다 끄면 인덱스는 유지되지만 상태 전환 중 컨슈머가 백오프 재연결을 수행합니다(자동 복구).
 
-### 알려진 한계 — 실배포 전 필수 처리
+### 남은 한계 — 설계와 재검토 조건
 
-- OpenSearch는 이미지의 **데모 인증서와 내장 admin 계정**을 씁니다. 정식 인증서 발급과 `internal_users` 교체가 선행돼야 합니다. (#118)
-- Kafka는 compose 내부 네트워크의 PLAINTEXT입니다. 포트 바인딩으로 외부 접근은 차단되지만, 브로커를 네트워크 밖에 열려면 SASL/TLS가 필요합니다. (#118)
-- Airflow가 읽는 앱 시크릿(공공 API 키·Slack 콜백)은 아직 `.env` 바인드 마운트입니다. `docker inspect`엔 안 뜨지만, 시크릿 매니저 이관은 배포 구조 개편(#119/#120)과 함께합니다.
-- Kafka UI 비밀번호는 `.env` 환경변수로 남습니다(Spring Boot `_FILE` 미지원, 127.0.0.1 전용).
-- 클라우드 배포 시 `./secrets/`를 AWS Secrets Manager로 이관합니다 — 앱의 `_FILE` 관례는 그대로 재사용됩니다([ADR-0006](docs/adr/0006-secret-management.md)).
+#118에서 non-root·최소 권한 계정·포트 정리·TLS 체인 검증까지 처리했다. 아래는
+localhost Docker 범위에서 위험도가 낮아 defer한 항목이다.
+
+- **OpenSearch·Consumer TLS는 데모 인증서**를 쓴다. 체인 검증은 켰지만 데모 CA의
+  **개인키가 공개**돼 있어(설치 스크립트에 포함) 진짜 MITM은 못 막는다. 또한
+  `config/opensearch-root-ca.pem`(데모 CA)은 **2028-04-19 만료** — 그 전에 교체.
+  - 재검토: 9200을 127.0.0.1 밖으로 열 때, 또는 CA 만료 전.
+  - 절차: `openssl`로 자체 CA + 노드/admin 인증서 생성 → `config/`에 마운트
+    (파일명은 `esnode.pem`·`root-ca.pem`·`kirk.pem` 유지 → `opensearch.yml` 수정 불필요)
+    → `securityadmin.sh -cacert ... -cert kirk.pem -key kirk-key.pem`로 초기화
+    → `config/opensearch-root-ca.pem`을 새 CA로 교체. 이때 `admin` 비밀번호도 함께 회전.
+- **`config/opensearch-security/`는 OpenSearch 2.8.0 이미지의 데모 파일**을 vendoring
+  한 것이다(`config.yml`·`audit.yml` 등은 2023년판). 이미지 태그를 올리면 security
+  초기화가 드리프트할 수 있으므로 재-sync 한다. `config/opensearch-security/README`
+  없이 이 문단이 그 기록이다.
+- **Kafka는 compose 내부 네트워크 PLAINTEXT**다. 9092는 127.0.0.1 전용, 9093은
+  호스트 미노출, 브로커는 compose 네트워크 밖으로 안 나간다.
+  - 재검토: 브로커를 네트워크 밖에 열 때.
+  - 절차: prod 오버레이에 `SASL_PLAINTEXT`(또는 `SASL_SSL`) 리스너 추가,
+    `KAFKA_LISTENER_SECURITY_PROTOCOL_MAP`·`KAFKA_SASL_ENABLED_MECHANISMS`,
+    SCRAM 자격증명 secret → Producer/Consumer `sasl_mechanism`·`sasl_plain_*` env.
+    KRaft 단일 브로커라 컨트롤러 리스너 설정도 함께 손봐야 한다.
+- Airflow가 읽는 앱 시크릿(공공 API 키·Slack 콜백)은 아직 `.env` 바인드 마운트다.
+  `docker inspect`엔 안 뜨지만, 시크릿 매니저 이관은 배포 구조 개편(#119/#120)과 함께.
+- Kafka UI 비밀번호는 `.env` 환경변수로 남는다(Spring Boot `_FILE` 미지원, 호스트 미노출).
+- 클라우드 배포 시 `./secrets/`를 AWS Secrets Manager로 이관한다 — 앱의 `_FILE`
+  관례는 그대로 재사용된다([ADR-0006](docs/adr/0006-secret-management.md)).

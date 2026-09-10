@@ -21,7 +21,7 @@
 > 안 쓰더라도 해당 파일이 없으면 `docker compose up`이 실패하므로, 안 쓰는 채널은
 > **빈 파일**로 만들어 둔다(`: > secrets/slack_webhook_url`). 로더가 빈 값을
 > 미설정과 같게 다룬다.
-| `opensearch_password` | Consumer가 접속할 OpenSearch 비밀번호 (데모 구성이면 `admin`) |
+| `opensearch_password` | Consumer 전용 `weather_writer` 계정 비밀번호 (기본 `weatherwriter`). 교체 시 `config/opensearch-security/internal_users.yml`의 해시도 `scripts/opensearch_hash.sh`로 재생성 |
 | `airflow_fernet_key` | Airflow Fernet 키 |
 | `airflow_admin_password` | Airflow 관리자 비밀번호 |
 

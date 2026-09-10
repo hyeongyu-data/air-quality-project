@@ -55,7 +55,7 @@ jobs:
                    kakao_refresh_token opensearch_password airflow_fernet_key airflow_admin_password; do
             echo dummy > "secrets/$f"
           done
-          KAFKA_UI_PASSWORD=dummy docker compose -f docker-compose.yaml -f docker-compose.prod.yaml config -q
+          KAFKA_UI_PASSWORD=dummy docker compose -f docker-compose.yaml -f docker-compose.prod.yaml --profile ops config -q
           rm -rf .env.prod secrets/slack_webhook_url secrets/smtp_password secrets/kakao_rest_api_key \
                  secrets/kakao_client_secret secrets/kakao_refresh_token secrets/opensearch_password \
                  secrets/airflow_fernet_key secrets/airflow_admin_password

@@ -85,12 +85,19 @@ class OpenSearchConnector:
         use_ssl = os.getenv("OPENSEARCH_USE_SSL", "false").lower() == "true"
         user = os.getenv("OPENSEARCH_USER")
         password = read_secret("OPENSEARCH_PASSWORD")
+        verify_certs = os.getenv("OPENSEARCH_VERIFY_CERTS", "false").lower() == "true"
+        ca_certs = os.getenv("OPENSEARCH_CA_CERTS") or None
         return OpenSearch(
             hosts=[{"host": self.host, "port": self.port}],
             http_auth=(user, password) if user and password else None,
             use_ssl=use_ssl,
-            # 데모/자체서명 인증서 환경을 위해 검증은 별도 플래그로
-            verify_certs=os.getenv("OPENSEARCH_VERIFY_CERTS", "false").lower() == "true",
+            # 데모/자체서명 인증서 환경을 위해 검증은 별도 플래그로.
+            # CA를 주면 체인 검증까지 한다(운영 프로필은 핀된 데모 CA를 마운트).
+            verify_certs=verify_certs,
+            ca_certs=ca_certs,
+            # 데모 노드 인증서 SAN에 compose 서비스명(opensearch)이 없어
+            # 호스트명 검증은 끈다 — 체인 검증은 유지.
+            ssl_assert_hostname=False,
             ssl_show_warn=False,
         )
 

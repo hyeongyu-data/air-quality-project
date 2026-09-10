@@ -29,7 +29,7 @@ services:
     # 포트 매핑
     ports:
       - "9092:9092"    # Plaintext 브로커 포트 (외부 접속)
-      - "9093:9093"    # Controller 포트 (내부용, 매핑 불필요)
+      # 9093(Controller)은 compose 내부 전용 — 호스트에 매핑하지 않는다 (#118)
     
     # 환경변수 설정
     environment:
@@ -285,7 +285,7 @@ services:
     # 포트 매핑
     ports:
       - "9200:9200"    # REST API
-      - "9600:9600"    # Performance Analyzer (선택사항)
+      # 9600(Performance Analyzer)은 쓰지 않으므로 호스트에 매핑하지 않는다 (#118)
     
     # 환경변수
     environment:
