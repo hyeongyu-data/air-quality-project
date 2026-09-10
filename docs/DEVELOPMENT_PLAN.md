@@ -75,27 +75,26 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 
 추가 코드 변경은 없으며, 실제 컨테이너 재생성 검증은 Docker 환경에서 별도 운영 검증 과제로 남긴다.
 
-## 다음 작업: 관측성 기반 최소 메트릭
+## 관측성 기반 최소 메트릭 확인 결과
 
-### 목표
+### 확인 결과
 
-Consumer가 살아 있는지, 메시지를 얼마나 처리했는지, 외부 알림이 실제 성공했는지 운영자가 기계적으로 확인할 수 있게 한다.
+기존 구현에서 Consumer 메트릭, 구조화 로그, event_id 상관관계와 관측성 문서가 이미 반영되어 있음을 확인했다. `consumer/metrics.py`, `consumer/logutil.py`, `tests/test_observability.py`, `docs/observability.md`가 해당 범위를 다룬다.
 
-### 1차 범위
+### 현재 제공 기능
 
-- Consumer에 구조화 가능한 단일 이벤트 로그 형식과 `event_id` 상관관계를 추가한다.
-- 처리 건수, 처리 시간, 채널별 성공·실패, 억제 건수를 안전한 메트릭 파일 또는 상태 엔드포인트로 노출한다.
-- 민감정보·원문 payload·토큰은 메트릭과 로그에 기록하지 않는다.
-- README와 RUNBOOK에 측정 항목, 해석 방법, 장애 기준을 기록한다.
+- `weather-metrics-*` OpenSearch 문서에 처리 지연·전달 결과·결측·억제 상태를 기록한다.
+- `LOG_FORMAT=json`과 `event_id` contextvar로 구조화 로그와 상관관계를 제공한다.
+- 메트릭·로그의 민감정보 비노출 및 best-effort 색인 동작을 테스트한다.
+- `docs/observability.md`에 필드, 알람 기준, 실측 수치를 문서화한다.
 
 ### 범위 외
 
 Prometheus/Grafana 배포, 외부 알림 시스템 연동, 전체 파이프라인 분산 추적은 후속 작업으로 둔다.
 
-### 완료 기준
+### 처리 결과
 
-- [ ] GitHub Issue와 이슈 번호 브랜치 생성
-- [ ] 단위 테스트로 성공·실패·억제 카운터와 로그 필드 검증
-- [ ] Consumer 재시작 시 상태 파일 권한과 민감정보 비노출 검증
-- [ ] pytest, ruff, compileall, Compose config, diff check 통과
-- [ ] README·RUNBOOK·운영 리스크·second-brain 갱신
+- [x] 기존 구현과 관련 테스트·문서 확인
+- [x] `docs/observability.md`와 README 연결 확인
+- [x] 중복 Issue #108 종료
+- [ ] Prometheus/Grafana 또는 외부 알람 연동은 후속 과제
