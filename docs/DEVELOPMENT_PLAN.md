@@ -112,3 +112,7 @@ Prometheus/Grafana 배포, 외부 알림 시스템 연동, 전체 파이프라�
 7. Secret Manager, TLS, 관리 포트 제한, non-root 컨테이너를 적용한다.
 
 각 항목은 독립 Issue와 이슈 번호 브랜치로 진행하며, 코드·Markdown 수정과 검증 후 PR로 병합한다.
+
+### 1번 항목 확인 결과: 공공 API 픽스처 테스트
+
+`tests/fixtures/`와 `tests/test_api_contract.py`에 KMA·AirKorea JSON/XML 픽스처, 성공 응답·실패 응답·필수 필드 검증이 이미 구현되어 있다. 중복 Issue #110은 종료하며 추가 코드는 작성하지 않는다.
