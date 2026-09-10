@@ -259,6 +259,30 @@ DISK_USAGE_THRESHOLD=80 ./scripts/check_storage_health.sh
 확인하고, OpenSearch red인 경우 인덱스·노드 상태를 확인한 뒤 데이터 삭제나
 볼륨 초기화는 승인 없이 수행하지 않습니다.
 
+### 정기 성능 측정 (#122)
+
+`consumer/measure_perf.py` 가 처리량·e2e/처리시간 p50-p95-p99·색인 성공률·결측률·
+Kafka lag 를 수집해 `docs/perf/<타임스탬프>.{json,md}` 로 남깁니다. `--compare` 는
+직전 `.json` 대비 회귀(p95 +50%, 색인률 <0.98, lag >10)를 리포트에 표시합니다 —
+측정 exit code 는 항상 0(수집 실패만 2), #121 알람과 분리.
+
+```bash
+# 주 1회 권장. prod 오버레이 필수.
+COMPOSE_FILE=docker-compose.yaml:docker-compose.prod.yaml \
+  docker compose run --rm --no-deps -T -e GIT_SHA="$(git rev-parse --short HEAD)" \
+  consumer python consumer/measure_perf.py --since 7d --out /app/state/perf --compare
+
+docker compose cp consumer:/app/state/perf/. docs/perf/   # 리포트 회수
+git add docs/perf && git commit -m "docs: 성능 측정 $(date +%F)"   # 사람이 검토 후
+```
+
+- cron 자동 커밋은 하지 않습니다("검증 없는 변경은 머지하지 않는다") — 파일만 쌓고
+  사람이 검토·커밋.
+- 외부 API 응답시간은 컨테이너 stdout 이 아니라 Airflow 태스크 로그에 있습니다:
+  `docker compose exec -T airflow sh -c "grep -rh api_call /opt/airflow/logs"`.
+- 실트래픽 퍼센타일은 표본 수가 작으면 방향성 참고용입니다(하루 4건 → 7일 ~28건).
+  형식·읽는 법은 [docs/perf/README.md](perf/README.md).
+
 ### 자동 알람 (#121)
 
 관측 알람 기준(a·b·c·d·g)을 `consumer/alert_watch.py`가, f·g의 디스크 부분을
