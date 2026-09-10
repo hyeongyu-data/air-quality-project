@@ -48,3 +48,29 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - 검증 범위 제한: 실제 Kafka 통합 검증은 malformed JSON에서 DLQ 발행 성공까지다. DLQ 발행 실패, 다중 파티션 공백, Consumer 재시작 복구는 단위 모델 테스트 범위이며 실제 Kafka 환경에서 검증했다고 주장하지 않는다.
 - 비차단 후속 과제: `commit()`의 모든 예외를 연결 초기화로 처리하는 동작은 단일 Consumer 운영 범위에서 허용한다. 확장 전에는 `CommitFailedError`와 일시적 타임아웃을 구분한다.
 - 다음 게이트: CI 재실행과 리뷰 확인 후 Ready/merge 승인.
+
+## P0-3 Airflow 메타DB 영속성 확인 결과
+
+### 확인 결과
+
+기존 PR #78에서 이미 `airflow_home:/opt/airflow` named volume으로 해결되어 있었다. `docker-compose.yaml`, `docs/RUNBOOK.md`, README와 Compose 설정을 재확인했고 `docker compose config -q`가 통과했다.
+
+### 현재 구현
+
+- `airflow_home` named volume이 `/opt/airflow` 전체를 보존한다.
+- RUNBOOK에 재생성 보존과 `docker compose down -v` 초기화 절차가 문서화되어 있다.
+- SQLite + SequentialExecutor 운영 한계와 PostgreSQL 전환 조건이 문서화되어 있다.
+
+### 범위
+
+- 대상: `docker-compose.yaml`, `.env.example`, `README.md`, `docs/RUNBOOK.md`, `docs/operational-risks.md`, 관련 테스트·개발 계획 문서.
+- 비범위: PostgreSQL 전환, executor 교체, 외부 배포 환경 구성, Airflow 인증 체계 개편.
+
+### 처리 결과
+
+- [x] 기존 구현(PR #78)과 문서 확인
+- [x] `docker compose config -q` 통과
+- [x] 중복 Issue #106 종료
+- [x] second-brain 기록 갱신
+
+추가 코드 변경은 없으며, 실제 컨테이너 재생성 검증은 Docker 환경에서 별도 운영 검증 과제로 남긴다.
