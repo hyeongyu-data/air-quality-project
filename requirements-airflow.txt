@@ -1,0 +1,9 @@
+# Airflow 커스텀 이미지(Dockerfile.airflow)에 빌드 시 설치한다 (#120).
+# 런타임 pip 설치(_PIP_ADDITIONAL_REQUIREMENTS)를 대체한다.
+#
+# DAG(dags/air_pipeline.py)와 producer(producer/)가 쓰는 런타임 의존성만.
+# opensearch-py는 consumer 전용이라 여기 없다(grpcio 등 무거운 전이 의존 회피).
+# 공유 패키지 버전은 tests/test_requirements_consistency.py 가 일치를 강제한다.
+requests==2.34.2
+kafka-python==3.0.9
+python-dotenv==1.2.2

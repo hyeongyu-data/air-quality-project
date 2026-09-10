@@ -224,3 +224,32 @@ Airflow PostgreSQL·LocalExecutor → `#120` 런타임 pip 제거 → `#121` 알
     `docker inspect`에 평문 DSN·비밀번호 부재(경로만), auth 실패 0건.
 - 범위 외: CeleryExecutor/KubernetesExecutor, webserver/scheduler 컨테이너 분리,
   MWAA, SQLite→Postgres 데이터 마이그레이션(실행 이력 유실 감수).
+- PR #125, squash 머지 `92eba6d`. 리뷰(APPROVE WITH NITS) 반영: 백업 스크립트
+  bash+pipefail+temp file, postgres 리소스 제한, `_AIRFLOW_WWW_USER_CREATE` 제거,
+  주석 정정, 테스트 앵커.
+
+### #120 Airflow 런타임 pip 설치 제거 (커스텀 이미지)
+
+- Issue: `#120` / 브랜치: `feat/120-airflow-image`
+- 구현:
+  - `Dockerfile.airflow`(`FROM apache/airflow:2.10.0` + `pip install -r
+    requirements-airflow.txt`). `--constraint`는 안 건다 — Airflow 2.10 제약
+    파일(2024-08)이 `requests==2.32.3` 등으로 고정해 최신 핀과 충돌(빌드 실패
+    확인). `requirements-airflow.txt` = requests·kafka-python·python-dotenv 3개
+    (opensearch-py는 consumer 전용이라 제외 — grpcio 등 회피).
+  - compose `airflow`: `image: apache/airflow:2.10.0` → `build: Dockerfile.airflow`
+    + `image: air-quality-airflow:local`, `_PIP_ADDITIONAL_REQUIREMENTS` 제거.
+  - CI: 이미지 빌드 + `import requests,kafka,dotenv,airflow` + `pip check` +
+    DagBag 파싱(`list-import-errors`는 DB 필요 → `python -c`로), hadolint에
+    `Dockerfile.airflow` 추가. `.dockerignore`에 `.claude`·`.github`·`secrets/`.
+  - `tests/test_requirements_consistency.py`(공유 패키지 버전 일치 강제, #22 연장).
+  - ADR-0008(코드 마운트 유지 근거·봉인 이미지 후속 조건), RUNBOOK·README 빌드 절차.
+- 검증: pytest 224개, ruff `E9,F`, compileall, hadolint(양쪽), base·오버레이
+  `config -q`, `git diff --check`. 격리 Docker:
+  - `docker build -f Dockerfile.airflow` 성공, `pip check` clean, deps 굳음
+    (requests 2.34.2·kafka-python 3.0.9).
+  - `--network none`에서 `airflow db migrate` 완주 — 런타임에 PyPI 안 침.
+  - DagBag `import_errors: {}`, dev 부팅 로그에 pip 설치 라인 0, healthy 50s.
+  - 파이프라인 회귀: 메시지 1건 → OpenSearch 색인 + 카카오 발송, DAG import OK.
+- 범위 외: 프라이빗 PyPI 미러, 멀티스테이지·크기 최적화, `producer/`·`consumer/`
+  이미지 COPY(봉인 이미지), GHA 레이어 캐시.
