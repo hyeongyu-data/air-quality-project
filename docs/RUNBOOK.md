@@ -226,3 +226,32 @@ DISK_USAGE_THRESHOLD=80 ./scripts/check_storage_health.sh
 도달하지 못한 상태입니다. 먼저 `docker system df -v`와 `docker compose ps`를
 확인하고, OpenSearch red인 경우 인덱스·노드 상태를 확인한 뒤 데이터 삭제나
 볼륨 초기화는 승인 없이 수행하지 않습니다.
+
+## 장애 대응 절차
+
+장애 대응 중에는 `.env`, 토큰, API 키, 비밀번호를 로그·Issue·PR에 복사하지 않습니다. 아래 명령은 상태 확인용이며, 볼륨 삭제·토픽 삭제·운영 토픽 재발행은 승인 없이 실행하지 않습니다.
+
+### 공공 API 장애·결측
+
+1. Airflow UI 또는 로그에서 실패한 DAG와 `api_call` 이벤트를 확인합니다.
+2. `docker compose logs --since 30m airflow`로 HTTP 상태·타임아웃·응답시간을 확인합니다.
+3. `weather-metrics-*`에서 `missing_count`와 `missing_indices`를 확인합니다.
+4. API 복구 후 실패한 DAG 실행만 재시도하고 결측 메시지를 운영 토픽에 직접 재발행하지 않습니다.
+
+### 알림 채널 인증 만료
+
+1. `weather-metrics-*`에서 `delivery_failed:true`와 `delivered_channels`를 확인합니다.
+2. 카카오는 `scripts/kakao_get_refresh_token.py`로 새 토큰을 발급하고 안전한 환경 주입 경로를 갱신합니다.
+3. SMTP 앱 비밀번호와 Slack Webhook을 교체한 뒤 Consumer를 재시작하고 테스트 메시지로 전달 결과를 확인합니다.
+
+### OpenSearch red 또는 Kafka 백로그·DLQ
+
+1. OpenSearch는 `curl -sS 'http://localhost:9200/_cluster/health?pretty'`와 `docker compose logs --since 30m opensearch`를 확인합니다.
+2. Kafka는 `docker compose exec kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server kafka:9092 --group weather-alert-group --describe`로 LAG를 확인합니다.
+3. DLQ의 원인·source_partition·source_offset·raw payload를 확인합니다.
+4. 원인 수정 전 운영 토픽 재발행·인덱스 삭제·볼륨 초기화를 실행하지 않습니다. 재처리하면 외부 알림이 중복될 수 있습니다.
+
+### 복구 후 공통 검증
+
+- `docker compose ps`의 healthy 상태, Consumer heartbeat, 최근 `weather-metrics-*` 문서를 확인합니다.
+- 전달 실패·결측·DLQ·LAG가 기준 이하인지 확인하고 수행 명령과 영향 범위를 운영 기록에 남깁니다.
