@@ -27,10 +27,16 @@ def test_postgres_service_and_volume_defined():
 
 
 def test_airflow_depends_on_postgres_healthy():
-    # airflow 블록 안에 postgres healthy 의존이 있어야 db migrate 가 안 깨진다
-    airflow_block = BASE.split("pj-airflow", 1)[1].split("\n  consumer:", 1)[0]
-    assert "postgres:" in airflow_block
-    assert "condition: service_healthy" in airflow_block
+    # airflow 의 depends_on 블록에 postgres healthy 가 있어야 db migrate 가 안 깨진다.
+    # 서비스 순서에 안 흔들리게 depends_on 블록만 잘라서 본다.
+    import re
+    # `  airflow:` 부터 다음 최상위 서비스(`\n  <name>:`) 전까지
+    m = re.search(r"\n  airflow:\n(.*?)(?=\n  [a-z_]+:\n)", BASE, re.DOTALL)
+    assert m, "airflow 서비스 블록을 못 찾음"
+    airflow_block = m.group(1)
+    dep = re.search(r"depends_on:\n(.*?)(?=\n    [a-z#])", airflow_block, re.DOTALL)
+    assert dep, "airflow.depends_on 없음"
+    assert re.search(r"postgres:\s*\n\s*condition:\s*service_healthy", dep.group(1)), dep.group(1)
 
 
 def test_prod_overlay_resets_plain_creds_and_uses_secrets():

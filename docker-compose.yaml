@@ -41,6 +41,11 @@ services:
     networks:
       - weather-network
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
@@ -142,15 +147,17 @@ services:
       TZ: 'Asia/Seoul'
       PYTHONUNBUFFERED: '1'
       PYTHONIOENCODING: 'utf-8'
-      _AIRFLOW_WWW_USER_CREATE: 'true'
-      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
-      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
-      # Executor & 로딩 (#119)
+      # 관리자 계정은 아래 command가 만든다(db migrate 이후). 엔트리포인트의
+      # _AIRFLOW_WWW_USER_CREATE는 fresh postgres에서 migrate 전에 돌아
+      # "You need to initialize the database" 에러만 남겨 제거했다 (#119).
+      # Executor (#119)
       # LocalExecutor: 워커 컨테이너 없이 스케줄러가 태스크를 별도 프로세스로
-      # 병렬 실행. 현재 워크로드(하루 4회·선형 4태스크)에 충분. Celery는 별도 이슈.
+      # 실행한다. 현재 DAG는 선형(validate>>fetch>>publish>>notify)이라 한 run
+      # 안의 병렬성 이득은 없고, 실질 이득은 "스케줄러가 태스크 실행에 안 막힘
+      # + SQLite lock 소멸"이다. Celery는 별도 이슈.
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      # SequentialExecutor에선 무시되던 병렬성 설정
+      # SequentialExecutor에선 무시되던 설정. DAG가 팬아웃되면 의미가 생긴다.
       AIRFLOW__CORE__PARALLELISM: '8'
       AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '4'
       AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: '1'
