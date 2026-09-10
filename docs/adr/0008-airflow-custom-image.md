@@ -27,8 +27,9 @@ RUN pip install --no-cache-dir -r /requirements-airflow.txt
   `build: {context: ., dockerfile: Dockerfile.airflow}` + `image: air-quality-airflow:local`.
   `_PIP_ADDITIONAL_REQUIREMENTS` 제거.
 - `requirements-airflow.txt` = `requests` · `kafka-python` · `python-dotenv` 3개.
-  **`opensearch-py` 는 뺐다** — DAG·producer 는 안 쓰고(consumer 전용) grpcio 등
-  무거운 전이 의존을 끌고 온다.
+  **`opensearch-py` 는 뺐다** — `dags/`·`producer/` 트리에 `opensearchpy` import 가
+  없다(consumer 전용). `opensearch-py==3.2.0` 은 `grpcio`·`protobuf`·
+  `opensearch-protobufs` 까지 전이 의존으로 끌고 온다.
 - **`--constraint` 는 안 건다**: Airflow 2.10 제약 파일(2024-08)이
   `requests==2.32.3`·`python-dotenv==1.0.1` 로 고정해 이 저장소의 최신 핀과
   충돌한다(빌드 실패 확인). 직접 의존 3개를 `==` 로 고정하고 base 이미지를
