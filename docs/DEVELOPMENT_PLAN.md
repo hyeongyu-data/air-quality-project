@@ -44,4 +44,5 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - 파티션별 완료 오프셋, DLQ 실패 위치 되감기, 실패 파티션 후속 처리 중단, 커밋·seek 실패 시 연결 폐기를 구현했다.
 - 검증: pytest 201개 통과, 커버리지 57.41%, ruff `E9,F`, compileall, Compose 설정, diff check 통과.
 - Docker 명령은 현재 출력 없이 응답하지 않아 실제 Kafka 통합 검증은 미완료로 기록한다. 단위 테스트를 통합 검증으로 간주하지 않는다.
-- 다음 게이트: 자체 보안·diff 검토 후 Conventional Commit과 Draft PR 작성. 원격 push/PR은 별도 확인 후 수행한다.
+- 리뷰 반영: 완료 오프셋을 rewind보다 먼저 커밋, DLQ Producer 멱등성 활성화, 배치 처리량 주석 정정, 순서·커밋 실패 회귀 테스트 추가(`7aa170b`).
+- 다음 게이트: CI 재실행과 리뷰 확인 후 Ready/merge 승인.
