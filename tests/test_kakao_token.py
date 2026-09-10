@@ -17,7 +17,7 @@ pytest.importorskip("dotenv", reason="alert 모듈이 python-dotenv에 의존")
 # consumer 패키지가 아니라 최상위 모듈로 가져온다. consumer/__init__.py는
 # consumer.py를 통해 kafka를 import 하는데, 이 테스트에는 필요 없는 의존성이다.
 # (pytest.ini의 pythonpath = consumer producer)
-from alert import KakaoAlertSender  # noqa: E402
+from alert import KakaoAlertSender, _write_json_atomically  # noqa: E402
 
 
 @pytest.fixture
@@ -77,3 +77,11 @@ def test_store_failure_does_not_raise(state_path, monkeypatch):
     )
     # 저장 실패가 이번 회차 발송을 막아서는 안 된다
     sender._store_refresh_token("ROTATED", None)
+
+
+def test_atomic_writer_replaces_file_and_leaves_no_temp_file(tmp_path):
+    path = tmp_path / "state" / "token.json"
+    _write_json_atomically(path, {"refresh_token": "ROTATED"})
+    assert json.loads(path.read_text(encoding="utf-8"))["refresh_token"] == "ROTATED"
+    assert list(path.parent.glob(f".{path.name}.*")) == []
+    assert oct(path.stat().st_mode & 0o777) == "0o600"

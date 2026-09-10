@@ -201,7 +201,7 @@ Kafka·OpenSearch 연결은 지수 백오프(5초 → 최대 300초)로 재시�
 
 healthcheck는 `wait_for_status=yellow`를 씁니다. 상태를 확인하지 않으면 red 클러스터도 200을 돌려줘 healthy로 통과합니다. 데이터 인덱스는 green이며, 남는 yellow는 ISM 플러그인의 시스템 인덱스(`.opendistro-ism-config`) replica로 단일 노드에서는 정상입니다.
 
-OpenSearch가 죽어 있어도 쿨다운은 유지됩니다. 마지막으로 알린 등급을 `SIGNATURE_STATE_PATH`(기본 `.signature_state.json`)에 남기고, 조회가 실패하면 이 캐시를 씁니다. 캐시가 없으면 이전처럼 발송하는 쪽(fail-open)으로 동작합니다.
+OpenSearch가 죽어 있어도 쿨다운은 유지됩니다. 마지막으로 알린 등급을 `SIGNATURE_STATE_PATH`(Compose 기본 `/app/state/signature_state.json`)에 남기고, 조회가 실패하면 이 캐시를 씁니다. Consumer의 `/app/state`는 `consumer_state` 명명 볼륨에 연결돼 컨테이너 재생성 후에도 유지됩니다. 캐시가 없으면 이전처럼 발송하는 쪽(fail-open)으로 동작합니다. 카카오 회전 토큰도 같은 볼륨의 `KAKAO_TOKEN_STATE_PATH`에 저장합니다.
 
 ### 데이터 영속성
 

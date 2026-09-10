@@ -23,6 +23,7 @@ except ImportError:  # 직접 실행 시
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
+import tempfile
 
 # 환경변수 로드
 load_dotenv()
@@ -33,6 +34,24 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
+
+def _write_json_atomically(path: Path, payload: Dict, mode: int = 0o600) -> None:
+    """상태 파일을 임시 파일에 쓴 뒤 같은 디렉터리에서 원자적으로 교체한다."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temp_path, mode)
+        os.replace(temp_path, path)
+        os.chmod(path, mode)
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
 
 try:
     from .timeutil import now_kst
@@ -594,7 +613,7 @@ class KakaoAlertSender:
     
     # refresh token 회전 값을 담아 두는 상태 파일. 컨슈머는 매시간 재시작하므로
     # 메모리에만 두면 회전된 토큰이 그때마다 사라진다.
-    DEFAULT_STATE_PATH = ".kakao_token.json"
+    DEFAULT_STATE_PATH = "/app/state/kakao_token.json"
 
     def __init__(self):
         """카카오 API 설정 초기화"""
@@ -622,15 +641,11 @@ class KakaoAlertSender:
         """회전된 refresh token을 상태 파일에 저장한다."""
         try:
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
-            self.state_path.write_text(
-                json.dumps(
-                    {"refresh_token": refresh_token,
-                     "refresh_token_expires_in": expires_in},
-                    ensure_ascii=False,
-                ),
-                encoding="utf-8",
+            _write_json_atomically(
+                self.state_path,
+                {"refresh_token": refresh_token,
+                 "refresh_token_expires_in": expires_in},
             )
-            os.chmod(self.state_path, 0o600)
             self.refresh_token = refresh_token
             logger.info(f"카카오 refresh token 회전 값을 저장했습니다: {self.state_path}")
         except Exception as e:
@@ -738,7 +753,7 @@ class OpenSearchAlertSender:
     """OpenSearch에 알림 데이터를 저장하는 클래스"""
     
     # OpenSearch가 죽어 있을 때도 쿨다운이 동작하도록 마지막 시그니처를 남긴다.
-    DEFAULT_STATE_PATH = ".signature_state.json"
+    DEFAULT_STATE_PATH = "/app/state/signature_state.json"
 
     # 지역별 쿨다운 상태 문서를 담는 전용 인덱스. 문서 ID = 지역.
     # 문서 GET은 refresh와 무관하게 실시간이라, 이력 인덱스를 검색하던
@@ -820,9 +835,7 @@ class OpenSearchAlertSender:
                 entry["last_external_send_at"] = last_sent_at
             cache[region] = entry
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
-            self.state_path.write_text(
-                json.dumps(cache, ensure_ascii=False), encoding="utf-8"
-            )
+            _write_json_atomically(self.state_path, cache)
         except Exception as e:
             logger.warning(f"시그니처 캐시 저장 실패: {str(e)}")
     
