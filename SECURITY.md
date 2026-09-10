@@ -12,11 +12,32 @@
 
 이 프로젝트는 공공데이터 API 키, SMTP 앱 비밀번호, 카카오 토큰, AWS 자격증명을 사용합니다. 모두 **비밀정보**로 취급합니다.
 
-- 모든 비밀정보는 `.env`로만 주입한다. `.env`는 `.gitignore`로 차단되어 있으며 절대 커밋하지 않는다.
+- 개발 환경은 `.env`로 주입한다. `.env`는 `.gitignore`로 차단되어 있으며 절대 커밋하지 않는다.
+- 운영 환경은 `.env` 평문 대신 **Docker secrets**를 쓴다 — `./secrets/<이름>` 파일이
+  컨테이너의 `/run/secrets/<이름>`으로 마운트되고, 애플리케이션은 `<VAR>_FILE`
+  환경변수(값이 아니라 경로)로 읽는다. 설계 근거는 [ADR-0006](docs/adr/0006-secret-management.md),
+  파일 목록·생성법은 `secrets/README.md`, 실행은 아래 "운영 프로필" 절.
 - 코드, 로그, PR 설명, 이슈, 스크린샷 어디에도 실제 키/토큰/비밀번호를 넣지 않는다.
 - README/문서의 예시 값은 항상 `your_xxx` 형태의 플레이스홀더만 사용한다.
 - Gmail은 계정 비밀번호가 아니라 앱 비밀번호를 사용한다.
 - AWS는 장기 액세스 키 대신 가능한 한 최소 권한 IAM 역할/프로파일을 사용한다.
+
+## 시크릿 회전·만료
+
+정기 회전을 권장합니다(권고 주기: 분기 1회, 유출 의심 시 즉시).
+
+| 시크릿 | 회전 방법 | 반영 |
+| --- | --- | --- |
+| 공공데이터 API 키 | 공공데이터포털 콘솔에서 재발급 | dev: `.env` / 운영: `secrets/weather_api_key`·`airkorea_api_key` 교체 후 재기동 |
+| SMTP 앱 비밀번호 | Gmail 앱 비밀번호 재발급 | `secrets/smtp_password` 교체 후 consumer 재기동 |
+| Slack Webhook | Slack 앱 설정에서 재발급 | `secrets/slack_webhook_url` 교체 후 재기동 |
+| 카카오 REST 키 / client secret | 카카오 개발자 콘솔 | `secrets/kakao_*` 교체 |
+| 카카오 refresh token | `scripts/kakao_get_refresh_token.py` (재발급 + 발급 즉시 검증, #95). 회전값은 상태 파일에 자동 저장 | 자동 |
+| Airflow 관리자 비밀번호 | 임의 문자열 재생성 | `secrets/airflow_admin_password` 교체 후 airflow 재기동(`reset-password` 자동 실행) |
+| Airflow Fernet 키 | **주의**: 기존 Connection/Variable이 옛 키로 암호화돼 있어 단순 교체하면 복호화 불가 | export → 키 교체 → import 절차 필요. Airflow DB 전환(#119)과 함께 정식 절차 수립 |
+
+카카오 refresh token 만료 임박은 Consumer가 경고 로그를 남깁니다(#50).
+자동 알림 배선은 #121에서 다룹니다.
 
 ## 비밀정보 유출 시 대응
 
@@ -72,28 +93,39 @@
 기본 compose는 로컬 학습용(무인증·평문·기본 계정)입니다. 운영에 가까운 구성이 필요하면 오버레이를 겹칩니다.
 
 ```bash
+cp .env.prod.example .env.prod          # 비밀 아닌 설정
+# ./secrets/ 파일 생성 — secrets/README.md 참고
 docker compose -f docker-compose.yaml -f docker-compose.prod.yaml up -d --build
 ```
 
 | 항목 | 기본(dev) | 운영 프로필 |
 | --- | --- | --- |
 | 관리 포트(9092·8080·9200·8081) | 모든 인터페이스 | **127.0.0.1 전용** |
-| Airflow 계정/Fernet 키 | `airflow/airflow`, 빈 키 | **환경변수 필수 — 미설정이면 기동 실패** |
+| 시크릿 주입 | `.env` 평문(`env_file` → 컨테이너 env) | **Docker secrets** — `./secrets/*` → `/run/secrets/*`, `*_FILE`로 읽음. consumer `env_file`은 `.env.prod`(비밀 아님)로 교체 |
+| Airflow 계정/Fernet 키 | `airflow/airflow`, 빈 키 | **secret 파일 필수 — 없으면 기동 실패** |
 | OpenSearch | 보안 플러그인 off, http | **TLS + 인증** (무인증 401) |
 | Kafka UI | 무인증, 동적 설정 허용 | **로그인 강제**, 동적 설정 차단 |
 
-필요 환경변수: `AIRFLOW_ADMIN_PASSWORD` · `AIRFLOW_FERNET_KEY` · `OPENSEARCH_ADMIN_PASSWORD` · `KAFKA_UI_PASSWORD`
+필요 파일: `./secrets/{slack_webhook_url,smtp_password,kakao_rest_api_key,kakao_client_secret,kakao_refresh_token,opensearch_password,airflow_fernet_key,airflow_admin_password}` · `.env.prod` · compose 보간용 `.env`의 `KAFKA_UI_PASSWORD`
 
 ### 검증 절차
 
 ```bash
+# 시크릿이 컨테이너 환경변수로 노출되지 않는다
+docker inspect pj-consumer -f '{{range .Config.Env}}{{println .}}{{end}}' | grep -iE '_FILE='   # 경로만
+docker exec pj-consumer sh -c "cat /proc/1/environ | tr \"\\0\" \"\\n\"" | grep -Ei 'password|token|webhook' || echo "값 노출 없음(OK)"
+
 curl -sk https://localhost:9200/                  # 401 이어야 함
-curl -sk -u admin:$OPENSEARCH_ADMIN_PASSWORD https://localhost:9200/   # 200
+curl -sk -u admin:$(cat secrets/opensearch_password) https://localhost:9200/   # 200
 curl -s -o /dev/null -w "%{http_code}" http://localhost:8081/api/clusters  # 302 (로그인 리다이렉트)
 docker port pj-opensearch 9200                    # 127.0.0.1:9200
 ```
 
 Consumer가 TLS+인증으로 저장까지 하는지는 메시지 1건을 발행해 `weather-alert-*` 색인을 확인합니다.
+
+> CI는 base compose만 `config -q`로 검증합니다. 오버레이의 top-level `secrets:`는
+> `.github/workflows/ci.yml`의 별도 스텝(더미 `secrets/` + `.env.prod` fixture)에서
+> 구문만 확인하고, 실제 시크릿 미노출은 위 수동 절차로 검증합니다.
 
 ### 롤백
 
@@ -101,6 +133,8 @@ Consumer가 TLS+인증으로 저장까지 하는지는 메시지 1건을 발행�
 
 ### 알려진 한계 — 실배포 전 필수 처리
 
-- OpenSearch는 이미지의 **데모 인증서와 내장 admin 계정**을 씁니다. 정식 인증서 발급과 `internal_users` 교체가 선행돼야 합니다.
-- Kafka는 compose 내부 네트워크의 PLAINTEXT입니다. 포트 바인딩으로 외부 접근은 차단되지만, 브로커를 네트워크 밖에 열려면 SASL/TLS가 필요합니다.
-- 시크릿은 여전히 `.env` 평문입니다. 클라우드 배포 시 시크릿 매니저로 이관합니다.
+- OpenSearch는 이미지의 **데모 인증서와 내장 admin 계정**을 씁니다. 정식 인증서 발급과 `internal_users` 교체가 선행돼야 합니다. (#118)
+- Kafka는 compose 내부 네트워크의 PLAINTEXT입니다. 포트 바인딩으로 외부 접근은 차단되지만, 브로커를 네트워크 밖에 열려면 SASL/TLS가 필요합니다. (#118)
+- Airflow가 읽는 앱 시크릿(공공 API 키·Slack 콜백)은 아직 `.env` 바인드 마운트입니다. `docker inspect`엔 안 뜨지만, 시크릿 매니저 이관은 배포 구조 개편(#119/#120)과 함께합니다.
+- Kafka UI 비밀번호는 `.env` 환경변수로 남습니다(Spring Boot `_FILE` 미지원, 127.0.0.1 전용).
+- 클라우드 배포 시 `./secrets/`를 AWS Secrets Manager로 이관합니다 — 앱의 `_FILE` 관례는 그대로 재사용됩니다([ADR-0006](docs/adr/0006-secret-management.md)).

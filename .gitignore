@@ -137,7 +137,12 @@ celerybeat.pid
 
 # Environments
 .env
+.env.prod
 .envrc
+
+# 운영 Docker secrets (#117) — 실제 값 파일. README만 커밋한다.
+/secrets/*
+!/secrets/README.md
 .venv
 .venv/
 airflow_env/

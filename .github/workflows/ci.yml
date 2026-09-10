@@ -45,6 +45,21 @@ jobs:
           touch .env
           docker compose config -q
 
+      # 운영 오버레이의 top-level secrets: 는 base config -q 로는 검증되지 않는다.
+      # 더미 fixture 로 구문·참조만 확인한다(실제 시크릿 미노출은 SECURITY.md 수동 절차).
+      - name: Validate prod overlay
+        run: |
+          cp .env.prod.example .env.prod
+          mkdir -p secrets
+          for f in slack_webhook_url smtp_password kakao_rest_api_key kakao_client_secret \
+                   kakao_refresh_token opensearch_password airflow_fernet_key airflow_admin_password; do
+            echo dummy > "secrets/$f"
+          done
+          KAFKA_UI_PASSWORD=dummy docker compose -f docker-compose.yaml -f docker-compose.prod.yaml config -q
+          rm -rf .env.prod secrets/slack_webhook_url secrets/smtp_password secrets/kakao_rest_api_key \
+                 secrets/kakao_client_secret secrets/kakao_refresh_token secrets/opensearch_password \
+                 secrets/airflow_fernet_key secrets/airflow_admin_password
+
       # 정적 분석 — 오류·버그 클래스(E9, F)만 게이트. 스타일 규칙 확장은
       # 전체 diff를 만들므로 별도 판단으로.
       - name: Lint (ruff)
