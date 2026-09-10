@@ -30,8 +30,10 @@ else
 fi
 
 # 실패 시 Slack 통보 (opt-in). webhook 은 로그·출력에 남기지 않는다.
+# report 안의 `\n` 은 리터럴 두 글자 — JSON 문자열의 \n 이스케이프로 그대로 들어가
+# Slack 이 줄바꿈으로 렌더한다(%s 로 넘긴다 — %b 면 실제 개행이 되어 JSON 이 깨진다).
 if [ "$failed" -ne 0 ] && [ "${ALERT_WATCH_SLACK_ENABLED:-false}" = "true" ] && [ -n "${SLACK_WEBHOOK_URL:-}" ]; then
-  payload="$(printf '{"text":"*[관측 알람]* 스토리지 점검%b"}' "$report")"
+  payload="$(printf '{"text":"*[관측 알람]* 스토리지 점검%s"}' "$report")"
   if curl --silent --show-error --fail -X POST -H 'Content-Type: application/json' \
        -d "$payload" "$SLACK_WEBHOOK_URL" >/dev/null 2>&1; then
     echo "Slack 통보 전송"
