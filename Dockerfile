@@ -51,10 +51,19 @@ RUN pip install --no-cache-dir -r requirements-consumer.txt
 COPY consumer ./consumer
 
 # ============================================================================
-# 폴더 구조 확인 및 권한 설정
+# 폴더 구조·권한 · non-root 실행 (#118)
 # ============================================================================
 
-RUN chmod -R 755 /app
+# uid/gid 10001 — 호스트 사용자와 충돌하지 않는 높은 값.
+# /app/state 를 이미지에서 app 소유로 만들어 두면, 비어 있는 명명 볼륨
+# (consumer_state)이 마운트될 때 Docker가 그 소유권을 복사해 non-root 로도
+# 쓰기가 된다(kafka_data·airflow_home 이 쓰는 것과 같은 패턴).
+RUN groupadd -r -g 10001 app \
+    && useradd -r -u 10001 -g app -d /app -s /usr/sbin/nologin app \
+    && mkdir -p /app/state \
+    && chmod -R 755 /app \
+    && chown -R app:app /app
+USER app
 
 # ============================================================================
 # 포트 (정보용, 실제 바인딩은 docker-compose에서)

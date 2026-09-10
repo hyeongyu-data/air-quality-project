@@ -153,3 +153,42 @@ Airflow PostgreSQL·LocalExecutor → `#120` 런타임 pip 제거 → `#121` 알
   `docker inspect`/`/proc/1/environ`에 더미 시크릿 값 부재(`*_FILE` 경로만),
   로더가 secret 파일 정상 읽음, dev `.env` 누출값 미주입, consumer가 파일 비번으로
   OpenSearch 인증 시도(더미라 401 — 값 사용 확인), Kafka 컨슈머 정상 조인.
+- PR #123, squash 머지 `7a91a72`. 리뷰(APPROVE WITH NITS) 반영: 빈 Fernet 키
+  `test -s` 가드, secretstore 엣지 케이스 테스트 3건.
+
+### #118 OpenSearch·Kafka 인증 강화와 컨테이너 non-root 실행
+
+- Issue: `#118` / 브랜치: `feat/118-service-auth-nonroot`
+- 범위 판단(localhost Docker 포트폴리오): 검증 가능한 것 먼저. non-root ·
+  weather_writer 최소 권한 계정 · 포트 정리 · TLS 체인 검증 · Fernet 회전 절차.
+  자체 서명 CA와 Kafka SASL은 **설계+재검토 조건**으로 defer(관리 포트가 이미
+  127.0.0.1 전용, 데모 CA 개인키 공개, KRaft 단일 브로커 SASL 리스크).
+- 구현:
+  - `Dockerfile`: `app` 사용자(uid 10001), `/app/state` 소유권, `USER app`.
+    명명 볼륨이 이미지 mountpoint 소유권을 복사받아 non-root 쓰기 가능.
+  - `config/opensearch-security/` — 이미지의 데모 security 설정 10개 전체를
+    커밋(부분 마운트 시 `config.yml` 없어 부팅 실패). `internal_users.yml`에
+    `weather_writer`(해시는 `scripts/opensearch_hash.sh`), `roles.yml`에
+    `weather_manager`(weather-* CRUD + 템플릿 + ISM + monitor. 그 외 전부 불가).
+    `admin`은 데모 해시 유지 → healthcheck·break-glass.
+  - `consumer/consumer.py` `_build_client`에 `ca_certs`·`ssl_assert_hostname=False`
+    (데모 노드 인증서 SAN에 compose 서비스명 없음).
+  - `docker-compose.prod.yaml`: security 설정 디렉터리 마운트, 핀된 데모
+    `config/opensearch-root-ca.pem` 마운트, `OPENSEARCH_USER: weather_writer`,
+    `OPENSEARCH_VERIFY_CERTS/CA_CERTS`. OSD·Kafka UI `ports: !override []`.
+    Fernet·admin 비번 `command:`에 `test -s` 가드(빈 파일도 기동 중단).
+  - base `docker-compose.yaml`: 9093(controller)·9600(perf) 호스트 매핑 제거.
+  - `SECURITY.md`: 운영 프로필 표 갱신, 컨테이너 실행 사용자 표, 기존 볼륨 주의,
+    Fernet 키 생성·회전 절차, 남은 한계(CA·SASL) 설계와 재검토 조건.
+  - `tests/test_opensearch_security_config.py`: 권한 확장 회귀 가드(텍스트 검사,
+    YAML 의존성 미추가).
+- 검증: pytest 214개, 커버리지 57.69%, ruff `E9,F`, compileall, hadolint,
+  base·오버레이(`--profile ops`) `docker compose config -q`, `git diff --check`.
+  격리 Compose(prod 오버레이, 새 볼륨)로 kafka·opensearch·consumer 기동 →
+  consumer `uid=10001(app)`, `/app/state` 쓰기 OK, kafka·opensearch non-root,
+  weather_writer: health 200 / weather-* 색인 201 / `_cluster/settings` 403 /
+  `.opendistro_security` 403 / 비-weather 인덱스 403. consumer가 weather_writer로
+  TLS+CA 체인 검증 하에 연결 성공, bootstrap(템플릿 3 + ISM 정책) 성공,
+  유효 메시지 1건이 `weather-alert-2026.09`·`weather-metrics-*`에 색인, 그룹 lag 0.
+- 범위 외: 자체 서명 CA(재검토: 9200 외부 노출), Kafka SASL(재검토: 브로커 외부
+  노출), Airflow 앱 시크릿 매니저(#119/#120), 클라우드 관리형.
