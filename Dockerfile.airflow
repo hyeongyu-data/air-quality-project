@@ -1,0 +1,22 @@
+# ============================================================================
+# 기상 파이프라인 Airflow 이미지 (#120)
+#
+# 런타임 pip 설치(_PIP_ADDITIONAL_REQUIREMENTS)를 제거한다. 그 방식은 컨테이너
+# 시작마다 PyPI에서 재설치해 시작이 느리고, PyPI 장애 시 기동이 실패했다.
+# 여기서 빌드 시 한 번 설치하고 레이어로 굳힌다.
+#
+#   docker compose build airflow      # 또는 docker compose up -d --build
+# ============================================================================
+FROM apache/airflow:2.10.0
+
+# 확장 이미지는 airflow 사용자로 pip install (~/.local). base 이미지의 pip를
+# 그대로 쓴다 — 무버전 upgrade는 빌드 시점마다 결과가 달라져 재현성을 깬다
+# (consumer/Dockerfile과 같은 판단).
+#
+# Airflow 2.10 제약 파일(--constraint)은 걸지 않는다: 그 파일(2024-08)이
+# requests==2.32.3 등을 고정해 이 저장소의 최신 핀과 충돌한다. 직접 의존 3개를
+# 고정하고 base 이미지를 태그로 고정하는 것으로 결정성을 확보한다.
+COPY requirements-airflow.txt /requirements-airflow.txt
+RUN pip install --no-cache-dir -r /requirements-airflow.txt
+
+LABEL org.opencontainers.image.description="기상 파이프라인 Airflow 이미지 (런타임 pip 제거, #120)"

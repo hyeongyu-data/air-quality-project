@@ -133,7 +133,11 @@ services:
   # Airflow: 워크플로우 오케스트레이션
   # ============================================================================
   airflow:
-    image: apache/airflow:2.10.0
+    # 런타임 pip 설치를 없애고 빌드 시 설치한다 (#120, Dockerfile.airflow).
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: air-quality-airflow:local
     container_name: pj-airflow
     
     # 포트 매핑
@@ -173,12 +177,9 @@ services:
       # API
       AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
       AIRFLOW__API__MAXIMUM_PAGE_LIMIT: 100
-      
-      # 추가 패키지 설치
-      # 버전 미고정이면 컨테이너 기동마다 최신을 설치해 재현성이 깨진다.
-      # requirements-consumer.txt와 같은 버전으로 고정하고 함께 올린다.
-      _PIP_ADDITIONAL_REQUIREMENTS: "requests==2.34.2 kafka-python==3.0.9 opensearch-py==3.2.0 python-dotenv==1.2.2"
-      
+
+      # 런타임 패키지 설치 없음 (#120) — requirements-airflow.txt 가 이미지에 굳어 있다.
+
       # 외부 서비스 주소 (컨테이너 내부에서 접근)
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       OPENSEARCH_HOST: opensearch

@@ -51,6 +51,12 @@ docker compose up -d --build
 docker compose ps
 ```
 
+`--build`는 `consumer`(`Dockerfile`)와 `airflow`(`Dockerfile.airflow`) 이미지를
+빌드합니다. Airflow는 런타임 pip 설치가 없고 의존성이 이미지에 굳어 있습니다
+([ADR-0008](adr/0008-airflow-custom-image.md)). 이미지 재빌드가 필요한 때:
+`requirements-airflow.txt` / `Dockerfile.airflow` / `requirements-consumer.txt` /
+`Dockerfile` 변경 시 — `docker compose build airflow` 또는 `up -d --build`.
+
 접속 주소:
 
 | 서비스 | 주소 | 로그인 |

@@ -74,7 +74,7 @@ flowchart LR
 
 | 구성 | 버전/이미지 | 역할 |
 | --- | --- | --- |
-| Airflow | `apache/airflow:2.10.0` | 6시간 주기 스케줄링, 수집, 계약 검증, Kafka 발행. `LocalExecutor` |
+| Airflow | `Dockerfile.airflow` (`FROM apache/airflow:2.10.0`) | 6시간 주기 스케줄링, 수집, 계약 검증, Kafka 발행. `LocalExecutor`. 런타임 pip 설치 없음 — [ADR-0008](docs/adr/0008-airflow-custom-image.md) |
 | PostgreSQL | `postgres:16-alpine` | Airflow 메타DB (전용 볼륨, 백업 스크립트) — [ADR-0007](docs/adr/0007-airflow-postgres-localexecutor.md) |
 | Kafka | `apache/kafka:3.7.0` | 버퍼·백로그 재생 (영속 볼륨, 보존 72h) |
 | Consumer | Python Docker image | 규칙 판정, 멀티채널 발송, 메트릭 |
@@ -126,7 +126,7 @@ Kafka 메시지의 필드 계약입니다. 발신(`producer/contract.py`)과 수
 
 ```bash
 cp .env.example .env   # 없으면 docs/RUNBOOK.md의 환경변수 절 참고
-docker compose up -d --build
+docker compose up -d --build   # 첫 실행은 consumer·airflow 이미지를 빌드한다
 # Airflow http://localhost:8080 에서 realtime_weather_alert DAG를 켠다
 ```
 

@@ -74,6 +74,17 @@ jobs:
         run: |
           pip install pip-audit
           pip-audit -r requirements-consumer.txt
+          # requirements-airflow.txt 는 consumer 핀의 부분집합(정합성은 pytest 가드) — 별도 audit 불필요
+
+      # Airflow 커스텀 이미지(#120) — 빌드 성공 + 의존성 굳음 + DAG 파싱.
+      # base 이미지 pull 로 ~1-2분. CI 시간이 문제되면 GHA 레이어 캐시가 후속.
+      - name: Build + smoke Airflow image
+        run: |
+          docker build -f Dockerfile.airflow -t aq-airflow-ci .
+          docker run --rm aq-airflow-ci python -c "import requests, kafka, dotenv, airflow; print('deps baked in')"
+          docker run --rm aq-airflow-ci python -m pip check
+          docker run --rm -v "$PWD/dags:/opt/airflow/dags" -e AIRFLOW__CORE__LOAD_EXAMPLES=false aq-airflow-ci \
+            python -c "from airflow.models.dagbag import DagBag; d=DagBag('/opt/airflow/dags', include_examples=False); assert not d.import_errors, d.import_errors; print('DAGs:', list(d.dags))"
 
       # 비밀정보 — 커밋 이력 전체 스캔. .env는 gitignore지만 실수로 커밋된
       # 키·토큰을 머지 전에 잡는다.
@@ -82,4 +93,6 @@ jobs:
 
       # Dockerfile 검증
       - name: Lint Dockerfile (hadolint)
-        run: docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
+        run: |
+          docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile
+          docker run --rm -i hadolint/hadolint:v2.12.0 < Dockerfile.airflow
