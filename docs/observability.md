@@ -56,18 +56,86 @@ Kafka 토픽·랙 확인은 기존 Kafka UI(8081)를 그대로 씁니다.
 
 ## 알람 기준
 
-판정 쿼리는 전부 위 메트릭 문서로 계산됩니다. 알림 발송 도구(예: OpenSearch Dashboards 알림, cron+curl)는 #24에서 결정합니다 — 여기는 **기준의 단일 출처**입니다.
+판정 쿼리는 전부 위 메트릭 문서로 계산됩니다. 여기는 **기준의 단일 출처**이고,
+자동 발송은 아래 "자동 발송 (#121)"이 담당합니다.
 
-| # | 조건 | 판정 | 의미 |
-| --- | --- | --- | --- |
-| a | 신규 이력 없음 | `weather-alert-*`에 최근 7시간 문서 0건 | 파이프라인 정지 (6시간 주기 + 1시간 여유) |
-| b | 전달 실패 | `delivery_failed:true` 발생 | 채널 인증 만료 등 — [트러블슈팅 3편](troubleshooting.md) 참고 |
-| c | 결측 발생 | `missing_count > 0` | API 부분 장애. `missing_indices`로 어느 API인지 특정 |
-| d | 컨슈머 랙 | `kafka-consumer-groups.sh --describe` LAG > 4 | 소비가 발행을 못 따라감 |
-| e | DAG 실패 | Airflow 실패 콜백(Slack) — 이미 #35에서 배선 | 수집·발행 실패 |
-| f | 디스크 | `docker system df` 볼륨 사용량 | 로컬 환경 수동 점검 |
-| g | 클러스터 red | `_cluster/health` status | 데이터 인덱스는 replica 0이라 red = 실제 장애 |
-| h | 카카오 토큰 만료 임박 | Consumer 경고 로그(`만료 임박`) — #50에서 배선 | 사전 재발급 |
+| # | 조건 | 판정 | 배선 | 의미 |
+| --- | --- | --- | --- | --- |
+| a | 신규 이력 없음 | `weather-alert-*/_count` `timestamp >= now-7h` = 0 (event-time) | `alert_watch.py` | 파이프라인 정지 (6시간 주기 + 1시간 여유) |
+| b | 전달 실패 | `weather-metrics-*` `delivery_failed:true` (최근 lookback) | `alert_watch.py` | 채널 인증 만료 등 — [트러블슈팅 3편](troubleshooting.md) |
+| c | 결측 발생 | `weather-metrics-*` `missing_count > 0` | `alert_watch.py` | API 부분 장애. `missing_indices`로 특정 |
+| d | 컨슈머 랙 | `weather-alert-group` 파티션별 (end − committed) 최댓값 > 4 | `alert_watch.py` | 소비가 발행을 못 따라감 |
+| e | DAG 실패 | Airflow 실패 콜백(Slack) | #35 | 수집·발행 실패 |
+| f | 디스크 | `df -P .` 사용률 ≥ 임계 | `check_storage_health.sh` (#112) | 볼륨 정리 필요 |
+| g | 클러스터 red | `_cluster/health` status | `alert_watch.py` + `check_storage_health.sh` | 데이터 인덱스 replica 0 — red = 실제 장애 |
+| h | 카카오 토큰 만료 임박 | Consumer 경고 로그(`만료 임박`) | #50 | 사전 재발급 |
+
+## 자동 발송 (#121)
+
+a·b·c·d·g 는 `consumer/alert_watch.py` 가 평가한다 — Consumer 이미지에 포함돼
+`read_secret`·TLS/CA·`weather_writer` 계정을 그대로 재사용한다. f·g 는
+`scripts/check_storage_health.sh` 가 호스트에서 잰다(컨테이너 안 `df` 는 VM 디스크라
+호스트 압박을 못 잼). e·h 는 이미 배선.
+
+**cron** (호스트, 저장소 루트에서):
+
+```cron
+*/15 * * * *  cd /path/to/repo && flock -n /tmp/aq-alert.lock docker compose run --rm --no-deps -T consumer python consumer/alert_watch.py >> /var/log/aq-alert.log 2>&1
+*/15 * * * *  cd /path/to/repo && scripts/check_storage_health.sh >> /var/log/aq-storage.log 2>&1
+```
+
+- `run --rm` 이지 `exec` 가 아니다 — Consumer 가 죽어 있어도 돌아야 하고(그 자체가
+  조건 a·d), `exec` 는 "컨테이너 다운" 과 "알람 발화" 를 exit code 로 못 가른다.
+- `flock -n` 으로 겹침 방지.
+
+**환경변수** (`.env` / `.env.prod`):
+
+| 변수 | 기본 | 뜻 |
+| --- | --- | --- |
+| `ALERT_WATCH_SLACK_ENABLED` | `false` | `true` 여야 실제 Slack 발송. 아니면 로그만(dry-run) |
+| `SLACK_WEBHOOK_URL` | — | 기존 항목 재사용 |
+| `ALERT_WATCH_LOOKBACK_MINUTES` | `70` | b·c 를 볼 최근 창 |
+| `ALERT_WATCH_COOLDOWN_MINUTES` | `60` | 같은 조건 재발송 억제 |
+| `ALERT_WATCH_LAG_THRESHOLD` | `4` | d 임계 |
+| `ALERT_WATCH_NO_HISTORY_HOURS` | `7` | a 창 |
+| `DISK_USAGE_THRESHOLD` | `80` | f 임계 (`check_storage_health.sh`) |
+
+exit code: `0` 이상 없음 / `1` 하나 이상 발화(쿨다운 억제 포함) / `2` 수집 실패.
+Slack 메시지는 `event_id`·`region`·`missing_indices`·`missing_count`·수치·
+`cluster_status` 만 담는다(문서 `_source` 원문·자유 텍스트 금지).
+
+**쿨다운 한계**: 조건별 마지막 발송 시각만 본다. 장애가 지속되면 쿨다운
+간격(기본 60분)마다 다시 울린다 — 조용해지지 않는다. "N회 이후 에스컬레이션"은
+범위 밖.
+
+## 확장 인터페이스 (설계)
+
+현재는 Slack 단일 receiver. 스택을 키울 때의 형태를 기록한다 — 실제 배선은 별도.
+
+### Prometheus / Grafana / Alertmanager
+
+```mermaid
+flowchart LR
+    C["Consumer<br/>/metrics 노출"] --> P["Prometheus<br/>scrape"]
+    P --> R["recording/alerting rules<br/>(a~g 를 PromQL 로)"]
+    R --> AM["Alertmanager"]
+    AM --> S["Slack"]
+    AM --> PD["PagerDuty"]
+    P --> G["Grafana<br/>시계열·대시보드"]
+```
+
+- Consumer 가 `weather-metrics-*` 색인 **대신(또는 추가로)** `/metrics`(prometheus_client)
+  를 노출 → `e2e_latency_seconds`·`process_duration_ms` 는 히스토그램, `delivery_failed`·
+  `missing_count` 는 카운터.
+- a~g 를 PromQL alerting rule 로: 예) `a` = `absent_over_time(weather_alert_indexed_total[7h])`.
+- Alertmanager receiver 가 Slack/PagerDuty 로 라우팅, `severity` 라벨로 분기.
+- **재검토 조건**: 시계열 대시보드·다중 receiver·라우팅 규칙이 실제로 필요해질 때.
+
+### PagerDuty / Opsgenie
+
+- Slack webhook 대신(또는 `alert_severity=CRITICAL` 만) Events API v2 로 incident 생성.
+- `alert_watch.py` 의 `notify()` 에 receiver 추상화 지점을 둔다(현재는 `_post_slack` 하나).
+- 온콜 로테이션·에스컬레이션 정책은 팀 운영 정책 결정 후 — 범위 밖.
 
 ## 실측 수치 (2026-07-30, 로컬 Docker)
 

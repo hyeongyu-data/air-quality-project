@@ -259,6 +259,34 @@ DISK_USAGE_THRESHOLD=80 ./scripts/check_storage_health.sh
 확인하고, OpenSearch red인 경우 인덱스·노드 상태를 확인한 뒤 데이터 삭제나
 볼륨 초기화는 승인 없이 수행하지 않습니다.
 
+### 자동 알람 (#121)
+
+관측 알람 기준(a·b·c·d·g)을 `consumer/alert_watch.py`가, f·g의 디스크 부분을
+`check_storage_health.sh`가 담당합니다. 기준의 단일 출처와 환경변수 표는
+[observability.md "자동 발송"](observability.md)에 있습니다.
+
+**cron** (호스트, 저장소 루트):
+
+```cron
+*/15 * * * *  cd /path/to/repo && flock -n /tmp/aq-alert.lock docker compose run --rm --no-deps -T consumer python consumer/alert_watch.py >> /var/log/aq-alert.log 2>&1
+*/15 * * * *  cd /path/to/repo && scripts/check_storage_health.sh >> /var/log/aq-storage.log 2>&1
+```
+
+- 운영에서는 `.env.prod`에 `ALERT_WATCH_SLACK_ENABLED=true`가 있어야 실제 발송됩니다
+  (없으면 dry-run 로그만). `SLACK_WEBHOOK_URL`은 `secrets/slack_webhook_url`.
+- `run --rm`이지 `exec`가 아닙니다 — Consumer가 죽어 있어도(그 자체가 알람) 돌아야 합니다.
+
+**알람 수신 시**:
+
+| 알람 | 먼저 확인 |
+| --- | --- |
+| a 신규 이력 없음 | `docker compose ps`, Airflow UI에서 DAG 실행 상태, Kafka 토픽 오프셋 |
+| b 전달 실패 | [알림 채널 인증 만료](#알림-채널-인증-만료) — 어느 채널인지 consumer 로그 |
+| c 결측 발생 | `missing_indices`로 어느 공공 API인지 → [공공 API 장애·결측](#공공-api-장애결측) |
+| d 컨슈머 랙 | consumer 로그(예외·재시작 루프), OpenSearch 연결 상태 |
+| f 디스크 | `docker system df -v`, 오래된 인덱스 ISM 확인 |
+| g 클러스터 red | [OpenSearch red](#opensearch-red-또는-kafka-백로그dlq) |
+
 ## 장애 대응 절차
 
 장애 대응 중에는 `.env`, 토큰, API 키, 비밀번호를 로그·Issue·PR에 복사하지 않습니다. 아래 명령은 상태 확인용이며, 볼륨 삭제·토픽 삭제·운영 토픽 재발행은 승인 없이 실행하지 않습니다.
