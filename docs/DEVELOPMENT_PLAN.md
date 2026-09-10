@@ -49,30 +49,28 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - 비차단 후속 과제: `commit()`의 모든 예외를 연결 초기화로 처리하는 동작은 단일 Consumer 운영 범위에서 허용한다. 확장 전에는 `CommitFailedError`와 일시적 타임아웃을 구분한다.
 - 다음 게이트: CI 재실행과 리뷰 확인 후 Ready/merge 승인.
 
-## 다음 승인 요청: P0-3 Airflow 메타DB 영속성
+## P0-3 Airflow 메타DB 영속성 확인 결과
 
-### 문제
+### 확인 결과
 
-Airflow 메타DB가 컨테이너 쓰기 레이어에 있어 재생성 시 실행 이력·XCom·DAG 활성화 상태가 사라질 수 있다. 운영 중 재배포가 곧 스케줄 상태 초기화로 이어지므로 데이터 파이프라인의 복구 가능성을 보장할 수 없다.
+기존 PR #78에서 이미 `airflow_home:/opt/airflow` named volume으로 해결되어 있었다. `docker-compose.yaml`, `docs/RUNBOOK.md`, README와 Compose 설정을 재확인했고 `docker compose config -q`가 통과했다.
 
-### 제안
+### 현재 구현
 
-- Compose에서 Airflow 메타DB 경로를 명시하고 전용 named volume으로 영속화한다.
-- 기존 로그 볼륨과 메타DB 볼륨을 분리해 보존 목적을 명확히 한다.
-- 컨테이너 재생성 전후 SQLite 파일과 Airflow 상태 보존을 격리 환경에서 검증한다.
-- 시크릿과 기존 운영 포트에는 변경을 가하지 않는다.
+- `airflow_home` named volume이 `/opt/airflow` 전체를 보존한다.
+- RUNBOOK에 재생성 보존과 `docker compose down -v` 초기화 절차가 문서화되어 있다.
+- SQLite + SequentialExecutor 운영 한계와 PostgreSQL 전환 조건이 문서화되어 있다.
 
 ### 범위
 
 - 대상: `docker-compose.yaml`, `.env.example`, `README.md`, `docs/RUNBOOK.md`, `docs/operational-risks.md`, 관련 테스트·개발 계획 문서.
 - 비범위: PostgreSQL 전환, executor 교체, 외부 배포 환경 구성, Airflow 인증 체계 개편.
 
-### 완료 기준
+### 처리 결과
 
-- [ ] Issue #47 또는 새 이슈로 요구사항과 재현 절차 기록
-- [ ] 메타DB 전용 named volume과 경로 문서화
-- [ ] 재생성 전후 DAG 상태·실행 이력 보존 검증
-- [ ] Compose config, pytest, ruff, compileall, diff check 통과
-- [ ] 시크릿 검사 및 second-brain 기록 갱신
+- [x] 기존 구현(PR #78)과 문서 확인
+- [x] `docker compose config -q` 통과
+- [x] 중복 Issue #106 종료
+- [x] second-brain 기록 갱신
 
-승인 전에는 원격 Issue·브랜치·push·PR을 생성하지 않는다.
+추가 코드 변경은 없으며, 실제 컨테이너 재생성 검증은 Docker 환경에서 별도 운영 검증 과제로 남긴다.
