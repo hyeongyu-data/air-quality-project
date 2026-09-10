@@ -91,3 +91,18 @@ curl -s "localhost:9200/weather-metrics-*/_search" -H 'Content-Type: application
   }
 }'
 ```
+
+### p50/p95 재측정
+
+최근 24시간 메트릭에서 처리 소요와 end-to-end 지연의 p50·p95를 조회합니다.
+운영 보고서에는 조회 기간과 Consumer 설정을 함께 기록합니다.
+
+```bash
+curl -s "localhost:9200/weather-metrics-*/_search" \
+  -H 'Content-Type: application/json' \
+  -d '{"size":0,"query":{"range":{"timestamp":{"gte":"now-24h"}}},"aggs":{"e2e_percentiles":{"percentiles":{"field":"e2e_latency_seconds","percents":[50,95]}},"process_percentiles":{"percentiles":{"field":"process_duration_ms","percents":[50,95]}}}}'
+```
+
+기본 구성의 이론상 처리량 상한은 `max_poll_records=10`과 10초 폴링 간격으로
+초당 약 1건입니다. 실제 용량 계획과 장애 기준은 위 쿼리의 p95를 기준으로
+갱신합니다.
