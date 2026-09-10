@@ -31,7 +31,7 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - 완료 기준:
   - [x] 파티션별 실패·후속 레코드·다중 파티션 시나리오 테스트
   - [x] 커밋 실패·seek 실패·Consumer 재시작 시나리오 테스트
-  - [x] 실제 Kafka 통합 검증: malformed JSON 1건을 `seoul-weather`에 주입하고 DLQ 격리 확인
+  - [x] 실제 Kafka 통합 검증: malformed JSON 1건을 `seoul-weather`에 주입하고 DLQ 발행 성공과 격리를 확인
   - [x] DLQ 복구 절차와 중복 발송 한계 문서화
   - [x] pytest 201개, ruff, compileall, Compose 설정 검증 통과
   - [x] 시크릿 검사 및 Second Brain 기록 갱신
@@ -45,4 +45,6 @@ P0-1의 애플리케이션 변경을 Issue #104와 `fix/104-kafka-offset-recover
 - 검증: pytest 201개 통과, 커버리지 57.41%, ruff `E9,F`, compileall, Compose 설정, diff check 통과.
 - Docker가 복구되어 `airquality` 격리 Compose로 Kafka·OpenSearch·Airflow·Consumer를 기동했다. 외부 알림 없이 malformed JSON 1건을 `seoul-weather`에 주입했고 `seoul-weather-dlq`에서 원인·파티션·오프셋·raw payload를 확인했다.
 - 리뷰 반영: 완료 오프셋을 rewind보다 먼저 커밋, DLQ Producer 멱등성 활성화, 배치 처리량 주석 정정, 순서·커밋 실패 회귀 테스트 추가(`7aa170b`).
+- 검증 범위 제한: 실제 Kafka 통합 검증은 malformed JSON에서 DLQ 발행 성공까지다. DLQ 발행 실패, 다중 파티션 공백, Consumer 재시작 복구는 단위 모델 테스트 범위이며 실제 Kafka 환경에서 검증했다고 주장하지 않는다.
+- 비차단 후속 과제: `commit()`의 모든 예외를 연결 초기화로 처리하는 동작은 단일 Consumer 운영 범위에서 허용한다. 확장 전에는 `CommitFailedError`와 일시적 타임아웃을 구분한다.
 - 다음 게이트: CI 재실행과 리뷰 확인 후 Ready/merge 승인.
