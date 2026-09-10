@@ -253,3 +253,35 @@ Airflow PostgreSQL·LocalExecutor → `#120` 런타임 pip 제거 → `#121` 알
   - 파이프라인 회귀: 메시지 1건 → OpenSearch 색인 + 카카오 발송, DAG import OK.
 - 범위 외: 프라이빗 PyPI 미러, 멀티스테이지·크기 최적화, `producer/`·`consumer/`
   이미지 COPY(봉인 이미지), GHA 레이어 캐시.
+- PR #126, squash 머지 `f317b87`. 리뷰(APPROVE WITH NITS) 반영: 테스트 과제약 완화,
+  opensearch-py 제외 근거 정정(3.2.0 이 grpcio 를 실제로 끌고 옴).
+
+### #121 관측 알람 기준(a~h) 자동 발송 배선
+
+- Issue: `#121` / 브랜치: `feat/121-alert-wiring`
+- 구현:
+  - `consumer/alert_watch.py` — Consumer 이미지에 포함, 호스트 cron 에서
+    `docker compose run --rm --no-deps -T consumer python consumer/alert_watch.py`.
+    a(이력 없음)·b(전달 실패)·c(결측)·d(컨슈머 랙)·g(클러스터 red) 평가. e·h 는
+    이미 배선. 순수 `evaluate()` + 조건별 쿨다운(`/app/state/alert_watch_cooldown.json`).
+    Slack 은 `ALERT_WATCH_SLACK_ENABLED=true` 여야 발송(기본 dry-run 로그). 필드
+    화이트리스트(`event_id`·`region`·`missing_indices`·수치·`cluster_status`)만,
+    `_source` 원문 안 읽음.
+  - 랙: `KafkaAdminClient.list_group_offsets` + `KafkaConsumer(group_id=None).end_offsets`
+    — read-only, 리밸런스 없음.
+  - f(디스크)는 `alert_watch.py` 에서 빼고 `scripts/check_storage_health.sh`(#112)에
+    Slack POST 4줄 추가(컨테이너 안 `df` 는 VM 디스크라 무의미). g 는 양쪽 다.
+  - `docs/observability.md`: 알람 기준 표를 배선 열 포함으로 확정, "자동 발송" 절
+    (cron·환경변수·exit code·쿨다운 한계), "확장 인터페이스" 절(Prometheus/Alertmanager,
+    PagerDuty 설계). ADR-0009. RUNBOOK "자동 알람" 절(cron + 알람별 대응).
+    `.env.example`·`.env.prod.example` `ALERT_WATCH_*`.
+  - `tests/test_alert_watch.py`(조건별·쿨다운·복합·garbage state — 10개).
+- 검증: pytest 234개, ruff `E9,F`, compileall, base·오버레이 `config -q`,
+  `git diff --check`. 격리 Compose(prod 오버레이, 채널 off, dry-run):
+  - fresh 스택 → `a` 발화(dry-run 로그), 유효 메시지 후 → `b`(채널 off 라
+    delivery_failed)·`c`(결측 8) 발화.
+  - 연속 실행 → 2회차부터 `b`·`c` 쿨다운 억제(로그·RC=1).
+  - consumer **정지** + 6건 주입 → `d` 랙 6 발화(`run --rm` 이라 죽은 컨테이너에서도 동작).
+  - `check_storage_health.sh` 강제 실패 → f·g 리포트, RC=1.
+- 범위 외: Prometheus/Alertmanager 풀스택, PagerDuty 실연동·온콜, Slack 외 채널,
+  상시 워처 컨테이너, "N회 후 에스컬레이션".
