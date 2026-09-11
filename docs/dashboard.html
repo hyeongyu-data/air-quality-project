@@ -177,6 +177,16 @@ tbody tr:last-child td{border-bottom:none}
 }
 .callout p+p{margin-top:9px}
 
+/* 파이프라인 시각화 */
+.diagram{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;box-shadow:var(--shadow);overflow:auto}
+.diagram svg{display:block;width:100%;min-width:760px;height:auto}
+.diagram .box{fill:var(--panel-2);stroke:var(--line);stroke-width:1.5}
+.diagram .primary{fill:var(--accent-soft);stroke:var(--accent);stroke-width:2}
+.diagram text{fill:var(--ink);font-family:var(--f-sans)}
+.diagram .label{font-size:14px;font-weight:700}.diagram .sub{font-size:11px;fill:var(--ink-3)}
+.diagram .line{stroke:var(--accent);stroke-width:2;fill:none;marker-end:url(#arrow)}
+.diagram .dashed{stroke:var(--warn);stroke-dasharray:6 5}
+
 footer{
   margin-top:72px; padding-top:22px; border-top:1px solid var(--line);
   color:var(--ink-3); font-size:12.5px; display:flex; flex-direction:column; gap:6px;
@@ -237,6 +247,39 @@ footer{
       <div class="sink"><b>카카오톡</b><span>토큰 자동 회전</span></div>
       <div class="sink"><b>이메일 · Slack</b><span>행동 권고 본문</span></div>
       <div class="sink"><b>콘솔</b><span>감사 로그</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <h2>시스템 흐름 한눈에 보기</h2>
+      <p>수집부터 재처리·관측성까지의 실제 데이터 경로</p>
+    </div>
+    <div class="diagram" role="img" aria-label="Airflow가 공공 API를 수집해 Kafka로 발행하고 Consumer가 판정한 뒤 OpenSearch와 알림 채널로 전달하는 시스템 흐름">
+      <svg viewBox="0 0 1040 300" xmlns="http://www.w3.org/2000/svg">
+        <defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
+        <text x="26" y="28" class="sub">정상 경로</text>
+        <rect x="24" y="48" width="190" height="82" rx="10" class="primary"/>
+        <text x="119" y="80" text-anchor="middle" class="label">Airflow DAG</text><text x="119" y="103" text-anchor="middle" class="sub">공공 API 수집·검증</text>
+        <rect x="280" y="48" width="190" height="82" rx="10" class="primary"/>
+        <text x="375" y="80" text-anchor="middle" class="label">Kafka</text><text x="375" y="103" text-anchor="middle" class="sub">버퍼·오프셋·재생</text>
+        <rect x="536" y="48" width="190" height="82" rx="10" class="primary"/>
+        <text x="631" y="80" text-anchor="middle" class="label">Consumer</text><text x="631" y="103" text-anchor="middle" class="sub">규칙 판정·쿨다운</text>
+        <path d="M214 89 H280 M470 89 H536" class="line"/>
+        <rect x="792" y="24" width="220" height="60" rx="10" class="box"/>
+        <text x="902" y="51" text-anchor="middle" class="label">OpenSearch</text><text x="902" y="70" text-anchor="middle" class="sub">이력·상태·메트릭</text>
+        <rect x="792" y="100" width="220" height="60" rx="10" class="box"/>
+        <text x="902" y="127" text-anchor="middle" class="label">알림 채널</text><text x="902" y="146" text-anchor="middle" class="sub">카카오 · 이메일 · Slack</text>
+        <path d="M726 70 H770 V54 H792 M726 108 H770 V130 H792" class="line"/>
+        <text x="26" y="188" class="sub">실패·관측 경로</text>
+        <rect x="280" y="208" width="190" height="62" rx="10" class="box"/>
+        <text x="375" y="235" text-anchor="middle" class="label">DLQ</text><text x="375" y="254" text-anchor="middle" class="sub">원인·파티션·오프셋 보존</text>
+        <rect x="536" y="208" width="190" height="62" rx="10" class="box"/>
+        <text x="631" y="235" text-anchor="middle" class="label">메트릭·하트비트</text><text x="631" y="254" text-anchor="middle" class="sub">지연·전달·생존 확인</text>
+        <path d="M375 130 V208 M631 130 V208" class="line dashed"/>
+        <path d="M726 239 H792" class="line dashed"/>
+        <text x="759" y="226" text-anchor="middle" class="sub">운영자 확인</text>
+      </svg>
     </div>
   </section>
 
