@@ -226,6 +226,7 @@ logs/**
 # Generated local artifacts
 outputs/
 *.pptx
+!docs/presentation/project.pptx
 
 # 카카오 refresh token 회전 상태 파일 (시크릿)
 .kakao_token.json
