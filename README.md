@@ -12,13 +12,13 @@
 
 <img src="docs/images/kakao-alert.png" alt="카카오톡 알림 수신 화면" width="480">
 
-실측 수치 (로컬 Docker, [재측정 쿼리](docs/observability.md#실측-수치-2026-07-30-로컬-docker)):
+지연은 기존 로컬 Docker 실측이고, 테스트는 2026-09-15 재검증 결과입니다([지연 재측정 쿼리](docs/observability.md#실측-수치-2026-07-30-로컬-docker)).
 
 | 항목 | 값 |
 | --- | --- |
 | end-to-end 지연 (발행 → 처리 완료) | 4.4~16초 — 폴링 간격(10초)이 지배 |
 | 메시지 처리 소요 (판정+색인+발송) | 100~300 ms |
-| 회귀 테스트 | 195개 (시작 시점 18개) |
+| 회귀 테스트 | 248개 통과 · 커버리지 56.75% (2026-09-15, 시작 시점 18개) |
 | CI 게이트 | compile · pytest · 커버리지 바닥 · ruff · pip-audit · gitleaks · hadolint |
 
 ## 데이터가 흐르는 모습 (실물)
@@ -275,7 +275,7 @@ DAG는 다음 경우에 태스크를 실패시킵니다. 실패는 `on_failure_c
 - **처리량 상한 초당 ~1건** — 폴링 기반 소비(10초 간격). 하루 4건 설계라 의도된 상한이며, 늘리려면 폴링 간격부터 줄인다.
 - **producer 네트워크 계층 커버리지 30%대** — 파싱은 픽스처 계약 테스트로 덮었지만 HTTP 재시도 경로는 미테스트.
 - **운영 프로필의 남은 숙제** — OpenSearch가 데모 인증서·내장 admin을 쓰고, Kafka는 compose 내부 PLAINTEXT다. 실배포 전 필수 처리 목록이 [SECURITY.md](SECURITY.md)에 있다.
-- **알람은 기준까지만** — 판정 쿼리 8종은 정의됐지만([observability.md](docs/observability.md)) 자동 발송 배선은 안 했다. 로컬 환경에선 울릴 곳이 없다.
+- **운영 알람의 재시도 한계** — [watcher](consumer/alert_watch.py)와 [운영 기준](docs/adr/0009-alert-watcher.md)은 구현돼 있습니다. 다만 watcher는 Slack 발송 실패나 dry-run에도 쿨다운을 기록해 다음 발송을 억제할 수 있습니다. Consumer의 기상 알림 전송 상태와 구분하며, 실제 외부 전송은 이번 테스트에서 재검증하지 않았습니다.
 - **단일 지역** — 서울 고정. 지역 확장 시 파티션 키 설계는 준비돼 있다(지역 기반).
 
 ## 문서
@@ -297,3 +297,10 @@ DAG는 다음 경우에 태스크를 실패시킵니다. 실패는 `on_failure_c
 ## AWS 이전 방향
 
 현재 구성이 로컬 Docker인 것은 **검증 가능성의 선택**입니다 — 이 저장소의 모든 코드는 `docker compose up`으로 재현·검증 가능해야 한다는 원칙을 지킵니다. AWS 이전의 구체적 형태(EventBridge + Lambda + SQS + DynamoDB), 구성 요소별 대응 근거, 이전 시 밟아야 하는 지뢰(타임존·멱등성·IaC)와 실행 트리거는 [ADR-0005](docs/adr/0005-aws-migration-path.md)에 기록돼 있습니다.
+
+
+## 프로젝트 발표 자료
+
+[소개·처리 흐름·대시보드 보기](docs/presentation/README.md) · [PDF](docs/presentation/project.pdf) · [PPT](docs/presentation/project.pptx)
+
+2026-09-15 기준 공개 코드와 검증 기록을 정리한 발표용 자료입니다.
