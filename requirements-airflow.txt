@@ -6,5 +6,5 @@
 # 3.2.0은 grpcio·protobuf·opensearch-protobufs까지 전이 의존으로 끌고 온다.
 # 공유 패키지 버전은 tests/test_requirements_consistency.py 가 일치를 강제한다.
 requests==2.34.2
-kafka-python==3.0.9
+kafka-python==3.0.12
 python-dotenv==1.2.2
